@@ -18,14 +18,14 @@ from datetime import date, timedelta
 from langchain_core.tools import StructuredTool
 
 from . import auth, config, db, hooks
+from .documents import NEW_HIRE_TYPES
 from .knowledge import cag, kag, mag, vectors
 
 REGISTRY = {}  # name -> {"fn", "roles", "tool" (LangChain), "description"}
 HR_ROLES = {"admin", "hr", "service"}
 ALL_ROLES = set(auth.ROLES)
 
-REQUIRED_DOCUMENTS = ["offer_letter_signed", "id_proof", "pan_card", "address_proof", "bank_details",
-                      "education_certificates", "nda_signed", "relieving_letter"]
+REQUIRED_DOCUMENTS = NEW_HIRE_TYPES  # uploaded on the Documents page into documents/new-hires/<id>/<type>/
 
 
 def hr_tool(roles=ALL_ROLES):
@@ -271,8 +271,9 @@ def policy_context(question: str) -> dict:
 def search_policy(query: str, k: int = 3) -> dict:
     """Semantic search over your HR policy documents (RAG). Returns sections to quote, with the document and
     section to cite."""
-    return {"results": [{"document": h["meta"].get("source"), "section": h["meta"].get("section"), "text": h["text"],
-                         "similarity": h["score"]} for h in vectors.search("policy", query, k=k)]}
+    from .knowledge import versions
+    return {"results": [{"document": versions.cite(h["meta"].get("source")), "section": h["meta"].get("section"),
+                         "text": h["text"], "similarity": h["score"]} for h in vectors.search("policy", query, k=k)]}
 
 
 @hr_tool(ALL_ROLES)
@@ -452,6 +453,12 @@ def decide_approval(approval_id, approve, note=""):
             db.x("UPDATE approvals SET status='pending' WHERE id=?", (approval_id,))
             raise PermissionError("Payroll must be approved by someone other than the person who submitted it")
         payroll.on_run_decision(a["ref"], approve, user.username)
+    if a["kind"] == "policy_version":
+        from .knowledge import versions
+        if not user.can("policies:manage"):
+            db.x("UPDATE approvals SET status='pending', decided_by=NULL, decided_at=NULL WHERE id=?", (approval_id,))
+            raise PermissionError("Only HR can publish a policy document")
+        versions.on_decision(int(a["ref"]), approve, user.username, note)
     if a["kind"] == "leave":
         lr = db.q1("SELECT * FROM leave_requests WHERE id=?", (int(a["ref"]),))
         db.x("UPDATE leave_requests SET status=? WHERE id=?", (status, lr["id"]))

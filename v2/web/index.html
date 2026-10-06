@@ -115,6 +115,16 @@
   .status { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; white-space:nowrap; color:var(--ink-2); }
   .status svg { width:14px; height:14px; flex:none; }
   .empty { color:var(--muted); padding:18px 0; text-align:center; }
+  .change { border:1px solid var(--grid); border-radius:10px; padding:12px 14px; margin:0 0 12px; background:var(--raised); }
+  .change h4 { margin:0 0 4px; font-size:14px; }
+  .diff { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin:6px 0; font-size:13px; }
+  .diff > div { border:1px solid var(--grid); border-radius:8px; padding:8px 10px; min-width:0; overflow-wrap:anywhere; }
+  .diff .lbl { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:2px; }
+  .clash { display:flex; gap:8px; align-items:flex-start; font-size:13px; margin:6px 0; }
+  .clash svg { width:14px; height:14px; flex:none; margin-top:3px; }
+  .vlist { list-style:none; margin:8px 0 0; padding:0; font-size:13px; }
+  .vlist li { display:flex; gap:10px; align-items:center; padding:4px 0; flex-wrap:wrap; }
+  @media (max-width:640px) { .diff { grid-template-columns:1fr; } }
 
   /* charts (HTML marks; specs: <=24px bars, 4px rounded data end, 2px gaps, hairline axes) */
   .chart { position:relative; transition:opacity .2s; }
@@ -340,18 +350,36 @@
 
       <!-- policies -->
       <section id="policies" class="hidden">
+        <div id="polPendingCard" class="card hidden" style="margin-bottom:16px">
+          <div class="card-head"><div><h3>Waiting for approval</h3><div class="sub">Uploads are not used until HR approves them. Approving publishes the new version and archives the old one, so you can restore it later.</div></div></div>
+          <div id="polPending"></div>
+        </div>
         <div class="card">
           <div class="card-head"><div><h3>Policy documents</h3><div id="polSub" class="sub"></div></div></div>
           <div id="polHR" class="hidden row" style="margin:6px 0 12px">
-            <label class="btn primary">Add documents<input id="polFiles" type="file" multiple accept=".pdf,.docx,.txt,.md" class="hidden"></label>
+            <label class="btn primary">Upload documents<input id="polFiles" type="file" multiple accept=".pdf,.docx,.txt,.md" class="hidden"></label>
             <button id="polReindex" class="btn">Re-index now</button>
             <span id="polMsg" class="muted"></span>
           </div>
           <div id="polList"></div>
+          <div id="polRetired"></div>
         </div>
         <div class="card" style="margin-top:16px">
           <div class="card-head"><div><h3>Rules read from these documents</h3><div class="sub">The leave engine and the assistant use these numbers. Edit the document and re-index to change them.</div></div></div>
           <div class="table-wrap"><table><thead><tr><th>Rule</th><th class="num">Value</th><th>Read from</th></tr></thead><tbody id="polRules"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- documents -->
+      <section id="documents" class="hidden">
+        <div class="card">
+          <div class="card-head"><div><h3 id="docTitle">Documents</h3><div id="docSub" class="sub"></div></div></div>
+          <div id="docPick" class="row hidden" style="margin:0 0 12px">
+            <select id="docOwner" aria-label="Person"></select>
+            <span id="docReview" class="muted"></span>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>Document</th><th>Status</th><th>Files</th><th></th></tr></thead><tbody id="docRows"></tbody></table></div>
+          <div id="docMsg" class="muted" style="margin-top:8px"></div>
         </div>
       </section>
 
@@ -463,10 +491,11 @@ const ICONS = {
   projects:'<path d="M3 7h7l2 2h9v10a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M8 13h8"/>',
   policies:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
   culture:'<path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z"/>',
+  documents:'<path d="M4 4h6l2 2h8v14H4z"/><path d="M12 11v6M9 14l3-3 3 3"/>',
 };
 const HR = r => ['admin','hr'].includes(r);
 const MGR = r => ['admin','hr','manager'].includes(r);
-const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['policies','Policies',()=>true],['hiring','Hiring',HR],['projects','Projects',MGR],['payroll','Payroll',HR],
+const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['policies','Policies',()=>true],['documents','Documents',()=>true],['hiring','Hiring',HR],['projects','Projects',MGR],['payroll','Payroll',HR],
               ['culture','Culture',()=>true],['mypay','My pay',r=>!HR(r)],['approvals','Approvals',MGR],
               ['tickets','Tickets',HR],['budget','AI budget',HR],['outbox','Outbox',HR]];
 function show(tab) {
@@ -474,7 +503,7 @@ function show(tab) {
   [...$('nav').children].forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'); });
   $('pageTitle').textContent = (TABS.find(t => t[0] === tab) || [])[1] || '';
   store.set('hr-tab', tab);
-  ({dashboard:loadDashboard, hiring:loadHiring, projects:loadProjects, culture:loadCulture, policies:loadPolicies, payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
+  ({dashboard:loadDashboard, hiring:loadHiring, projects:loadProjects, culture:loadCulture, policies:loadPolicies, documents:() => loadDocuments(), payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
 }
 function start(user) {
   me = user; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -639,7 +668,7 @@ async function loadDashboard() {
   const attn = $('dAttn'); attn.replaceChildren();
   if (!d.attention.length) { const li = el('li'); li.append(statusTag('good'), el('span', 'Nothing needs attention right now.', 'txt')); attn.append(li); }
   d.attention.forEach(a => { const li = el('li'); const go = el('button', 'Open', 'btn ghost');
-    go.onclick = () => { show(a.tab); if (a.tab === 'hiring' && a.ref) setTimeout(() => candidate(a.ref), 300); if (a.tab === 'tickets' && a.ref) ticket(a.ref);
+    go.onclick = () => { if (a.tab === 'documents' && a.ref) docOwner = a.ref; show(a.tab); if (a.tab === 'hiring' && a.ref) setTimeout(() => candidate(a.ref), 300); if (a.tab === 'tickets' && a.ref) ticket(a.ref);
       if (a.tab === 'culture' && a.ref) setTimeout(() => eventDetail(a.ref), 400); };
     li.append(statusTag(a.kind), el('span', a.text, 'txt'), go); attn.append(li); });
 
@@ -734,23 +763,50 @@ async function loadPolicies() {
 function drawPolicies(d) {
   const n = d.documents.reduce((a, x) => a + x.sections.length, 0);
   $('polSub').textContent = d.using_sample
-    ? `Answers come from the sample handbook. Add your own documents here, or put them in ${d.folder}, and they replace it.`
+    ? `Answers come from the sample handbook. Upload your own documents here, or put them in ${d.folder}, and they replace it.`
     : `Answers come from ${d.documents.length === 1 ? 'this document' : `these ${d.documents.length} documents`} (${n} section${n === 1 ? '' : 's'}) in ${d.folder}.`;
+  drawPending(d.pending || []);
   const box = $('polList'); box.replaceChildren();
   d.documents.forEach(doc => {
     const det = el('details'); det.style.cssText = 'border-top:1px solid var(--grid);padding:10px 0';
-    const sum = el('summary'); sum.append(el('strong', doc.name), el('span', ` · ${doc.sections.length} section${doc.sections.length === 1 ? '' : 's'}`, 'muted'));
+    const sum = el('summary'); sum.append(el('strong', doc.name),
+      el('span', ` · ${doc.sections.length} section${doc.sections.length === 1 ? '' : 's'}` + (doc.version ? ` · version ${doc.version}` : ''), 'muted'));
     det.append(sum);
     const ul = el('ul'); ul.style.cssText = 'margin:8px 0 0;padding-left:20px'; doc.sections.forEach(s => ul.append(el('li', s))); det.append(ul);
+    if (doc.versions && doc.versions.length) {
+      det.append(el('div', 'Versions', 'section-title'));
+      const vl = el('ul', undefined, 'vlist');
+      doc.versions.filter(v => ['active', 'archived'].includes(v.status)).forEach(v => {
+        const li = el('li'); li.append(el('strong', `v${v.version}`),
+          v.status === 'active' ? statusTag('good', 'Live') : el('span', 'Archived', 'muted'),
+          el('span', `${(v.activated_at || v.uploaded_at || '').replace('T', ' ')} · ${v.decided_by || v.uploaded_by}${v.note ? ' · ' + v.note : ''}`, 'muted'));
+        if (v.status === 'archived' && HR(me.role)) {
+          const b = el('button', 'Restore this version', 'btn ghost');
+          b.onclick = () => policyAction('/api/policies/rollback', {name:doc.name, version:v.version},
+            `Make version ${v.version} of ${doc.name} live again? The current version is archived, not lost.`, `Version ${v.version} of ${doc.name} is live again.`);
+          li.append(b);
+        }
+        vl.append(li);
+      });
+      det.append(vl);
+    }
     if (HR(me.role) && !d.using_sample && !['Approved additions'].includes(doc.name)) {
-      const del = el('button', 'Remove', 'btn ghost'); del.style.marginTop = '6px';
-      del.onclick = async () => { if (!confirm(`Remove ${doc.name}? Answers stop using it straight away.`)) return;
-        try { drawPolicies(await api('/api/policies/delete', {name:doc.name})); $('polMsg').textContent = `Removed ${doc.name}.`; }
-        catch (e) { $('polMsg').textContent = e.message; } };
+      const del = el('button', 'Retire', 'btn ghost'); del.style.marginTop = '6px';
+      del.onclick = () => policyAction('/api/policies/delete', {name:doc.name},
+        `Stop using ${doc.name}? Answers stop using it straight away; every version stays in the archive and can be restored.`, `Retired ${doc.name}.`);
       det.append(del);
     }
     box.append(det);
   });
+  const ret = $('polRetired'); ret.replaceChildren();
+  if ((d.retired || []).length && HR(me.role)) {
+    ret.append(el('div', 'Retired documents', 'section-title'));
+    const vl = el('ul', undefined, 'vlist');
+    d.retired.forEach(r => { const li = el('li'); const b = el('button', 'Restore', 'btn ghost');
+      b.onclick = () => policyAction('/api/policies/rollback', {name:r.name, version:r.version}, `Put ${r.name} (version ${r.version}) back in use?`, `${r.name} is back in use.`);
+      li.append(el('span', r.name), el('span', `version ${r.version}`, 'muted'), b); vl.append(li); });
+    ret.append(vl);
+  }
   const rb = $('polRules'); rb.replaceChildren();
   (d.rules || []).forEach(r => {
     const tr = el('tr');
@@ -759,11 +815,133 @@ function drawPolicies(d) {
     rb.append(tr);
   });
 }
-$('polFiles').onchange = async e => {
+function drawPending(list) {
+  $('polPendingCard').classList.toggle('hidden', !list.length);
+  const box = $('polPending'); box.replaceChildren();
+  list.forEach(v => {
+    const c = v.changes || {}; const card = el('div', undefined, 'change');
+    card.append(el('h4', `${v.name} · version ${v.version}`),
+      el('div', `Uploaded by ${v.uploaded_by} on ${(v.uploaded_at || '').replace('T', ' ')} · ` +
+        (c.is_new ? `new document, ${c.sections} sections` :
+          [['added', 'added'], ['removed', 'removed'], ['changed', 'changed']].filter(([k]) => (c[k] || []).length)
+            .map(([k, w]) => `${c[k].length} section${c[k].length === 1 ? '' : 's'} ${w}`).join(', ') || 'wording only'), 'muted'));
+    if ((c.rule_changes || []).length) {
+      const t = el('table'); const tb = el('tbody'); const hr = el('tr'); ['Rule', 'Now', 'After approval'].forEach(h => hr.append(el('th', h)));
+      t.append(el('thead')); t.firstChild.append(hr);
+      c.rule_changes.forEach(r => { const tr = el('tr'); tr.append(el('td', r.rule), el('td', r.before ?? 'not set'), el('td', r.after)); tb.append(tr); });
+      t.append(tb); t.style.margin = '8px 0'; card.append(t);
+    }
+    (c.changed || []).slice(0, 4).forEach(ch => {
+      card.append(el('div', ch.section, 'muted'));
+      const df = el('div', undefined, 'diff'); const a = el('div'); const b = el('div');
+      a.append(el('span', 'Now', 'lbl'), el('span', ch.before)); b.append(el('span', 'After approval', 'lbl'), el('span', ch.after));
+      df.append(a, b); card.append(df);
+    });
+    if ((c.added || []).length) card.append(el('div', 'Added: ' + c.added.join(', '), 'muted'));
+    if ((c.removed || []).length) card.append(el('div', 'Removed: ' + c.removed.join(', '), 'muted'));
+    (v.conflicts || []).forEach(x => {
+      const row = el('div', undefined, 'clash'); const i = svgEl('svg', {viewBox:'0 0 16 16', 'aria-hidden':'true'});
+      i.innerHTML = STATUS_ICON[x.kind === 'rule' ? 'warning' : 'info'];
+      row.append(i, el('span', x.kind === 'rule'
+        ? `${x.rule}: ${x.here} here, but ${x.other_value} in ${x.other}. If you approve, this document's value is used (the newest approved document wins).`
+        : `${x.section} is also covered in ${x.other}. Check the two agree.`));
+      card.append(row);
+    });
+    if (HR(me.role)) {
+      const r = el('div', undefined, 'row'); r.style.marginTop = '10px';
+      const ok = el('button', 'Approve and publish', 'btn primary'); const no = el('button', 'Reject', 'btn');
+      ok.onclick = () => policyAction('/api/policies/decide', {id:v.id, approve:true}, null, `${v.name} version ${v.version} is live.`);
+      no.onclick = () => policyAction('/api/policies/decide', {id:v.id, approve:false}, `Reject ${v.name} version ${v.version}? The upload is discarded.`, `Rejected ${v.name} version ${v.version}.`);
+      r.append(ok, no); card.append(r);
+    }
+    box.append(card);
+  });
+}
+async function policyAction(path, body, question, done) {
+  if (question && !confirm(question)) return;
+  try { drawPolicies(await api(path, body)); $('polMsg').textContent = done; } catch (e) { $('polMsg').textContent = e.message; }
+}
+// ---------------------------------------------------------------- documents (onboarding and employee files)
+async function b64files(files) {
   const list = [];
-  for (const f of e.target.files) { const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; buf.forEach(b => bin += String.fromCharCode(b)); list.push({name:f.name, content_b64:btoa(bin)}); }
+  for (const f of files) { const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; buf.forEach(b => bin += String.fromCharCode(b)); list.push({name:f.name, content_b64:btoa(bin)}); }
+  return list;
+}
+let docOwner = '';
+const DOC_STATUS = {received:['info', 'Received, to check'], verified:['good', 'Verified'], rejected:['critical', 'Rejected: upload again']};
+async function loadDocuments() {
+  const hr = HR(me.role); $('docPick').classList.toggle('hidden', !hr);
+  try {
+    if (hr) {
+      const d = await api('/api/documents'); const sel = $('docOwner'); sel.replaceChildren();
+      const g1 = el('optgroup'); g1.label = 'New hires (onboarding)';
+      d.new_hires.forEach(h => { const o = el('option', `${h.name} · joins ${h.start_date}` + (h.missing ? ` · ${h.missing} missing` : ''));
+        o.value = h.id; g1.append(o); });
+      const g2 = el('optgroup'); g2.label = 'Employees';
+      d.employees.forEach(e => { const o = el('option', `${e.name} (${e.id})` + (e.files ? ` · ${e.files} file${e.files === 1 ? '' : 's'}` : '')); o.value = e.id; g2.append(o); });
+      sel.append(g1, g2);
+      docOwner = docOwner || (d.new_hires[0] || d.employees[0] || {}).id || '';
+      sel.value = docOwner;
+      $('docReview').textContent = d.to_review ? `${d.to_review} uploaded document${d.to_review === 1 ? '' : 's'} to check` : 'Nothing waiting to be checked';
+    } else docOwner = me.employee_id || '';
+    if (!docOwner) { $('docSub').textContent = 'Your login is not linked to an employee record.'; return $('docRows').replaceChildren(); }
+    drawChecklist(await api('/api/documents/checklist?owner=' + encodeURIComponent(docOwner)));
+  } catch (e) { $('docSub').textContent = e.message; }
+}
+$('docOwner').onchange = e => { docOwner = e.target.value; loadDocuments(); };
+function drawChecklist(c) {
+  const hr = HR(me.role), hire = c.kind === 'new_hire';
+  $('docTitle').textContent = hr ? `Documents: ${c.name}` : 'My documents';
+  $('docSub').textContent = hire
+    ? `Onboarding documents for ${c.name}, joining ${c.start_date}. ` + (c.missing.length ? `${c.missing.length} still needed; the onboarding agent and the morning reminder ask for them.` : 'Everything required is in.')
+    : (hr ? `Files for ${c.name}: medical certificates for sick leave, investment proofs for payroll, and updates.`
+          : 'Upload medical certificates for sick leave, investment proofs for tax, and updated ID or bank details. HR checks each one.');
+  const tb = $('docRows'); tb.replaceChildren();
+  c.items.forEach(it => {
+    const tr = el('tr');
+    const st = el('td');
+    if (DOC_STATUS[it.status]) st.append(statusTag(...DOC_STATUS[it.status]));
+    else if (it.status === 'declared') st.append(el('span', 'On record (no file)', 'muted'));
+    else st.append(hire ? statusTag('warning', 'Missing') : el('span', 'Not uploaded', 'muted'));
+    const files = el('td');
+    it.files.slice(0, 3).forEach(f => {
+      const line = el('div'); const a = el('a', f.file_name); a.href = `/api/documents/file/${f.id}`;
+      line.append(a, el('span', ` · ${f.uploaded_at.slice(0, 10)} · ${f.status}${f.note ? ': ' + f.note : ''}`, 'muted'));
+      if (hr && f.status === 'received') {
+        const ok = el('button', 'Verify', 'btn ghost'), no = el('button', 'Reject', 'btn ghost');
+        ok.onclick = () => reviewDoc(f.id, 'verified'); no.onclick = () => reviewDoc(f.id, 'rejected');
+        line.append(ok, no);
+      }
+      files.append(line);
+    });
+    const up = el('td'); const lab = el('label', 'Upload', 'btn'); const inp = el('input'); inp.type = 'file'; inp.className = 'hidden';
+    inp.accept = '.pdf,.docx,.jpg,.jpeg,.png,.txt';
+    inp.onchange = async e => {
+      $('docMsg').textContent = 'Uploading...';
+      try { const out = await api('/api/documents/upload', {owner_id:c.owner_id, doc_type:it.type, files:await b64files(e.target.files)});
+        drawChecklist(out); const dup = out.saved.some(x => x.duplicate);
+        $('docMsg').textContent = dup ? 'That file was already uploaded.' : `Saved ${it.label} for ${c.name}.`;
+        if (HR(me.role)) loadDocuments(); }
+      catch (err) { $('docMsg').textContent = err.message; }
+      e.target.value = '';
+    };
+    lab.append(inp); up.append(lab);
+    tr.append(el('td', it.label), st, files, up); tb.append(tr);
+  });
+}
+async function reviewDoc(id, status) {
+  const note = status === 'rejected' ? prompt('Why is it rejected? The person sees this note.', 'Not readable') : '';
+  if (note === null) return;
+  try { drawChecklist(await api('/api/documents/review', {id, status, note})); $('docMsg').textContent = `Marked ${status}.`; loadDocuments(); }
+  catch (e) { $('docMsg').textContent = e.message; }
+}
+
+$('polFiles').onchange = async e => {
+  const list = await b64files(e.target.files);
   $('polMsg').textContent = `Reading ${list.length} document(s)...`;
-  try { const d = await api('/api/policies/upload', {files:list}); drawPolicies(d); $('polMsg').textContent = `Indexed ${d.indexed_sections} sections. New questions use them now.`; }
+  try { const d = await api('/api/policies/upload', {files:list}); drawPolicies(d);
+    const waiting = d.staged.filter(v => v.status === 'pending').length, same = d.staged.length - waiting;
+    $('polMsg').textContent = (waiting ? `${waiting} document${waiting === 1 ? '' : 's'} waiting for approval above. ` : '') + (same ? `${same} unchanged.` : ''); }
   catch (err) { $('polMsg').textContent = err.message; }
   e.target.value = '';
 };
@@ -1231,11 +1409,11 @@ $('hRoundsEdit').onclick = async () => {
   await api(`/api/hiring/jobs/${b.job_id}/rounds`, {rounds: v.split(/[\s,]+/).filter(Boolean)}); loadHiring();
 };
 async function upload(files) {
-  const job = $('hJob').value; const list = [];
-  for (const f of files) { const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; buf.forEach(b => bin += String.fromCharCode(b)); list.push({name: f.name, content_b64: btoa(bin)}); }
+  const job = $('hJob').value; const list = await b64files(files);
   $('hMsg').textContent = `Uploading ${list.length} file(s)...`;
   try { const r = await api('/api/hiring/upload', {job_id: job, files: list});
-    $('hMsg').textContent = `Added ${r.added.length}: ` + r.added.map(a => `${a.name} → ${LABEL[a.stage] || a.stage}`).join(', ') + (r.duplicates.length ? ` · duplicates: ${r.duplicates.join(', ')}` : '') + (r.unreadable.length ? ` · unreadable: ${r.unreadable.join(', ')}` : '');
+    $('hMsg').textContent = `Added ${r.added.length}: ` + r.added.map(a => `${a.name} → ${LABEL[a.stage] || a.stage}`).join(', ') + (r.duplicates.length ? ` · duplicates: ${r.duplicates.join(', ')}` : '') + (r.unreadable.length ? ` · unreadable: ${r.unreadable.join(', ')}` : '')
+      + ` · saved in inbox/${job}/, with a copy sorted into inbox/${job}/sorted/<stage>/`;
     loadHiring();
   } catch (e) { $('hMsg').textContent = e.message; }
 }

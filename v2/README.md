@@ -60,9 +60,34 @@ They replace the sample handbook, answers cite them by file and section, and the
 accrual, carry-forward) are read from them. See `policies/README.md`.
 
 ```bash
-python app.py policies add "Leave Policy 2026.pdf"   # copy in and index
-python app.py policies                               # what was indexed
+python app.py policies add "Leave Policy 2026.pdf"   # stage it; prints what changes
+python app.py policies pending                       # waiting for approval
+python app.py policies approve ID                    # publish (the old version is archived)
+python app.py policies history NAME                  # versions; rollback NAME VERSION restores one
+python app.py policies                               # what is live
 ```
+
+A policy uploaded again becomes a new version that HR approves before it goes live: the agent shows the changed
+sections and rules and warns when another document disagrees. The old version is kept and can be restored, so
+answers never mix two versions.
+
+## Uploads in the web portal
+
+Each upload sits on the page for its step, and each file goes to its own folder:
+
+- **Policies:** policy documents, versioned as above (`policies/`, `policies/.pending/`, `policies/.archive/`).
+- **Hiring:** resumes for an opening (`inbox/<JOB-ID>/`, sorted by stage after screening).
+- **Documents:** onboarding documents for new hires (`documents/new-hires/<NH-ID>/<type>/`) and employee documents
+  such as medical certificates and investment proofs (`documents/employees/<E-ID>/<type>/`). HR verifies or
+  rejects each one; employees see and upload only their own. Uploads unblock the matching onboarding tasks.
+
+```bash
+python app.py documents NH-202                       # checklist for a new hire or employee
+python app.py documents add NH-202 pan_card pan.pdf
+python app.py documents verify ID                    # or: reject ID --note "Not readable"
+```
+
+[GUIDE.md section 23](GUIDE.md#23-uploads-where-each-file-goes-and-policy-versions) walks through it.
 
 [HR_CHAT_AGENT.md](HR_CHAT_AGENT.md) maps the HR chat agent brief (authentication, policy answers, leave balance and
 calculation tools, reasoning, context) to the code, with a five-minute demo.
@@ -198,7 +223,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 104 tests, offline, about 35 seconds
+python -m unittest discover -s tests -t .     # 114 tests, offline, about 35 seconds
 ```
 
 ## Layout
@@ -215,6 +240,8 @@ python -m unittest discover -s tests -t .     # 104 tests, offline, about 35 sec
 | `hrai/payroll.py` | Salary structures, Indian payroll, payslips, payroll runs |
 | `hrai/projects.py` | Projects, allocations, capacity and the bench, tasks, timesheets |
 | `hrai/knowledge/policies.py`, `policies/` | Your HR policy documents: reading, sections, citations |
+| `hrai/knowledge/versions.py` | Policy versions: staging, changes and conflicts, approval, archive, rollback |
+| `hrai/documents.py`, `documents/` | Uploaded employee and new-hire documents (git-ignored) |
 | `hrai/engage.py` | Events and budgets, RSVPs, kudos, awards, anonymous pulse surveys |
 | `hrai/auth.py`, `hrai/db.py` | Logins and roles; SQLite schema |
 | `hrai/hooks.py`, `hooks.d/` | Hooks |

@@ -31,7 +31,8 @@ Contents
 20. [MCP and A2A](#20-mcp-and-a2a)
 21. [Security checks to try](#21-security-checks-to-try)
 22. [Moving to your own data](#22-moving-to-your-own-data)
-23. [Troubleshooting](#23-troubleshooting)
+23. [Uploads: where each file goes, and policy versions](#23-uploads-where-each-file-goes-and-policy-versions)
+24. [Troubleshooting](#24-troubleshooting)
 
 ---
 
@@ -269,8 +270,10 @@ Markdown copy instead to see it quickly: save a file `policies/Casual leave upda
 Employees get 6 days of casual leave per year. Casual leave can be taken for at most 3 consecutive days.
 ```
 
-then `python app.py policies reindex` and `python app.py knowledge kag rules`. The first matching section wins, so
-remove or rename the file afterwards to go back. Files are read in name order.
+then `python app.py policies reindex` and `python app.py knowledge kag rules`. When two documents state the same
+rule differently, the most recently approved one wins. Run `python app.py policies remove "Casual leave update.md"`
+afterwards to go back. In the web portal, upload the file on **Policies** instead: it waits for approval, shows
+"Casual leave: most consecutive days 2 → 3" and warns that it disagrees with the Leave Policy (see section 23).
 
 ## 8. MAG: memory of the conversation and of the user
 
@@ -394,7 +397,9 @@ python app.py ask "What documents do I need for onboarding?" --as deepa
 ```
 
 Vikram Singh is missing documents, so a reminder is drafted for him. **Web:** the drafts are in **Outbox**; the
-Dashboard shows onboarding progress and joiners with missing documents.
+Dashboard shows onboarding progress and joiners with missing documents. **Documents** lets HR (or the joiner)
+upload each missing file; once the ID proof, PAN and bank details are in, the IT and payroll tasks unblock
+(section 23).
 
 ## 12. Approvals and the outbox
 
@@ -542,7 +547,7 @@ Each call runs as the token's user, with the same role checks.
 ## 22. Moving to your own data
 
 1. **Policies:** remove the sample files from `policies/` and add yours (`python app.py policies add ...`, or
-   **Policies → Add documents**). Check **Rules read from these documents**: anything marked "Not found" is using a
+   **Policies → Upload documents**). Check **Rules read from these documents**: anything marked "Not found" is using a
    default, so add a sentence your document is missing or a pattern to `RULE_PATTERNS`. See `policies/README.md`.
 2. **Employees and leave:** replace `data/employees.json` (same fields as `samples/data/employees.json`) with an
    export from your HRMS, or load it the way `hrai/samples.py` does.
@@ -553,7 +558,72 @@ Each call runs as the token's user, with the same role checks.
 To start over with a clean database, stop the server and move `var/` aside, then run `python app.py init`
 (add `--demo-users` for the demo logins).
 
-## 23. Troubleshooting
+## 23. Uploads: where each file goes, and policy versions
+
+Every upload happens on the page for that step of the process, and every file is kept in a folder named for what it
+is:
+
+| What | Where to upload | Who | Saved in |
+| --- | --- | --- | --- |
+| Policy documents | **Policies → Upload documents** | HR, admin | `policies/` once approved; waiting uploads in `policies/.pending/<id>/`, every published version in `policies/.archive/<file>/v<N>/` |
+| Resumes | **Hiring**, pick an opening, drop files | HR, admin | `inbox/<JOB-ID>/`, then a copy in `inbox/<JOB-ID>/sorted/<stage>/` after screening |
+| Onboarding documents (signed offer, ID, PAN, address, bank, certificates, NDA, relieving letter) | **Documents**, pick the new hire | HR, admin, or the joiner once they have a login | `documents/new-hires/<NH-ID>/<type>/` |
+| Employee documents (medical certificate, investment proof, ID, PAN, address, bank, resignation letter) | **Documents** (employees see **My documents**) | the employee for themselves, HR for anyone | `documents/employees/<E-ID>/<type>/` |
+
+Files are never overwritten: each one is saved as `<date-time>__<file name>` and the newest counts. `documents/`
+holds personal data, so it is git-ignored; set `HRAI_DOCS_DIR` to keep it elsewhere. Allowed: `.pdf .docx .jpg .jpeg
+.png .txt`, up to 5 MB each. An employee can only see and upload their own files; managers see their own only.
+
+### Policy updates: versioned sync with approval
+
+When a policy file is uploaded with the same name as a live one, it does not overwrite it and it is not merged with
+it. It becomes **the next version**, waiting for approval:
+
+1. The agent compares it with the live version: sections added, removed and changed (shown side by side, "Now" and
+   "After approval"), and every leave rule whose number would change ("Work from home: days a week 2 → 3").
+2. It checks it against the **other** live documents: a rule stated differently elsewhere is a warning (the newest
+   approved document will win, so fix one of them), and a section on the same topic elsewhere is a note.
+3. HR approves on **Policies** (or in **Approvals**). Only then is it copied live, re-indexed for RAG, CAG and KAG, and
+   cited as "Work From Home Policy.md (version 2)". Until then, answers use the live version only, so they never
+   mix two versions.
+4. The old version is archived, never deleted. **Restore this version** (or `policies rollback`) puts it back.
+   **Retire** takes a document out of use; it stays in the archive and can be restored too.
+
+Why this and not the alternatives: **replacing** straight away publishes mistakes before anyone reads them and
+loses the old wording; **overlapping** (keeping both) makes the assistant cite two different numbers for the same
+rule; **merging** sections automatically can produce a policy nobody wrote. Versioned sync keeps one live version,
+a human in the loop, and a full history.
+
+A file copied straight into `policies/` (or removed from it) is picked up as a new version at the next re-index
+without approval, since whoever can write to that folder is already trusted. Uploading the identical file again
+does nothing. A second upload before approval replaces the first one in the queue.
+
+**Command line:**
+
+```bash
+python app.py policies add "Work From Home Policy.md"        # stages it: prints the changes and conflicts
+python app.py policies pending
+python app.py policies approve 12                            # or: reject 12
+python app.py policies history "Work From Home Policy.md"
+python app.py policies rollback "Work From Home Policy.md" 1
+python app.py policies remove "Casual leave update.md"       # retire
+python app.py documents NH-202                               # checklist for a new hire or employee
+python app.py documents add NH-202 pan_card pan.pdf
+python app.py documents verify 3                             # or: reject 3 --note "Not readable"
+```
+
+**Web portal**, as `hr_demo`:
+
+1. **Policies → Upload documents**, pick a copy of `Work From Home Policy.md` with "up to 3 days a week". A **Waiting
+   for approval** card shows the rule change 2 → 3 and both versions of the section. **Approve and publish**.
+2. Open the document in the list: it shows version 2 and its history. **Restore this version** on version 1 goes back.
+3. **Documents**, pick Vikram Singh. Upload a file against PAN card and Bank account details: the status becomes
+   "Received, to check", and his payroll set-up task unblocks. **Verify** or **Reject** (with a note the person sees;
+   a rejected document is asked for again).
+4. Sign in as an employee: **Documents** shows **My documents**. Upload a medical certificate; the Dashboard tells HR
+   "1 uploaded document waiting for HR to check".
+
+## 24. Troubleshooting
 
 | Problem | Fix |
 | --- | --- |

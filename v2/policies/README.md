@@ -6,10 +6,20 @@ the sample handbook in `data/policy_handbook.md` is used instead; as soon as you
 
 Three ways to add or change them:
 
+- In the web console, open **Policies** and use **Upload documents** (HR and admin).
+- `python app.py policies add "Leave Policy 2026.pdf" "Code of Conduct.docx"`
 - Copy files here. The `policy_watch` trigger re-indexes within five minutes while `python app.py serve` runs,
   or run `python app.py policies reindex` to do it now.
-- `python app.py policies add "Leave Policy 2026.pdf" "Code of Conduct.docx"`
-- In the web console, open **Policies** and use **Add documents** (HR and admin).
+
+An upload (web or `policies add`) is staged as the next version of that document and waits for HR approval: the
+agent lists the sections and leave rules that would change and any rule another document states differently.
+Approving publishes it and archives the previous version; `python app.py policies rollback NAME VERSION` (or
+**Restore this version**) brings an old one back, and `policies remove NAME` retires a document. Files copied in
+directly are trusted and recorded as a new version at the next re-index. When two documents state the same rule
+differently, the most recently approved one wins.
+
+`.pending/` holds uploads waiting for approval and `.archive/<file>/v<N>/` every published version. Both are
+skipped when answering questions and git-ignored.
 
 `python app.py policies` lists what was indexed, document by document and section by section.
 

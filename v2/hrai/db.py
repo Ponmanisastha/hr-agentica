@@ -117,6 +117,14 @@ CREATE TABLE IF NOT EXISTS payroll_runs (
 CREATE TABLE IF NOT EXISTS payslips (
     id INTEGER PRIMARY KEY, run_id INTEGER, employee_id TEXT, month TEXT, gross REAL, total_deductions REAL, net REAL,
     earnings TEXT, deductions TEXT, employer TEXT, paid_days REAL, lop_days REAL, notes TEXT);
+CREATE TABLE IF NOT EXISTS policy_versions (
+    id INTEGER PRIMARY KEY, name TEXT, version INTEGER, status TEXT, sha256 TEXT, size INTEGER, changes TEXT,
+    conflicts TEXT, approval_id INTEGER, uploaded_by TEXT, uploaded_at TEXT, decided_by TEXT, decided_at TEXT,
+    activated_at TEXT, note TEXT);
+CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY, owner_kind TEXT, owner_id TEXT, doc_type TEXT, file_name TEXT, path TEXT, sha256 TEXT,
+    size INTEGER, status TEXT DEFAULT 'received', note TEXT, uploaded_by TEXT, uploaded_at TEXT, reviewed_by TEXT,
+    reviewed_at TEXT);
 CREATE TABLE IF NOT EXISTS followups (
     id INTEGER PRIMARY KEY, candidate_id TEXT, due TEXT, kind TEXT, note TEXT, status TEXT DEFAULT 'open',
     created_at TEXT, done_at TEXT);
