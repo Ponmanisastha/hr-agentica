@@ -43,6 +43,10 @@ def recall_node(state: State):
 
 def keyword_route(text):
     t = text.lower()
+    if re.search(r"\bevent|celebrat|festival|diwali|town ?hall|offsite|party|rsvp|kudos|appreciat|award|nominat|"
+                 r"birthday|anniversar|pulse|survey|engagement|culture|lunch|what is coming up|whats coming up|"
+                 r"coming up this (month|week)|\bplan a\b|\borganis\w+ a\b|\borganiz\w+ a\b", t):
+        return "culture"
     if re.search(r"project|allocat|staff(ing|ed)?\b|bench|capacity|utilisation|utilization|timesheet|milestone|"
                  r"who is free|roll(ing)? off|\bfte\b|what is slipping|slipping|\btasks?\b|\bput\b .* \bon\b", t):
         return "projects"

@@ -98,6 +98,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._get_payroll(path)
         if path.startswith("/api/projects"):
             return self._get_projects(path)
+        if path.startswith("/api/culture"):
+            return self._get_culture(path)
         if path in ("/api/insights", "/api/insights/candidates.csv"):
             from urllib.parse import parse_qs, urlparse
             from . import insights
@@ -194,6 +196,61 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             return self._ok_or_error(T.run("project_details", project=m.group(1)))
         return self._send(404, {"error": "not found"})
+
+    def _get_culture(self, path):
+        from urllib.parse import parse_qs, urlparse
+        qs = parse_qs(urlparse(self.path).query)
+        if path == "/api/culture":
+            out = {"calendar": T.run("events_calendar", days_ahead=int(qs.get("days", ["60"])[0]))["calendar"],
+                   "kudos": T.run("kudos_wall"), "awards": T.run("list_awards")["awards"],
+                   "surveys": T.run("pulse_results")["surveys"]}
+            report = T.run("engagement_report")
+            if "error" not in report:
+                out["engagement"] = report["engagement"]
+            return self._send(200, out)
+        m = re.fullmatch(r"/api/culture/events/([\w-]+)", path)
+        if m:
+            return self._ok_or_error(T.run("event_details", event=m.group(1)))
+        m = re.fullmatch(r"/api/culture/surveys/(\d+)", path)
+        if m:
+            return self._ok_or_error(T.run("pulse_results", survey_id=int(m.group(1))))
+        return self._send(404, {"error": "not found"})
+
+    def _post_culture(self, path, body):
+        calls = {
+            "/api/culture/events": lambda: T.run("create_event", title=body.get("title", ""), day=body.get("day", ""),
+                                                 kind=body.get("kind", "celebration"), location=body.get("location", ""),
+                                                 organiser=body.get("organiser", ""), budget=float(body.get("budget") or 0),
+                                                 description=body.get("description", ""),
+                                                 start_time=body.get("start_time", "")),
+            "/api/culture/events/update": lambda: T.run("update_event", event=body.get("event", ""),
+                                                        status=body.get("status", ""), day=body.get("day", ""),
+                                                        location=body.get("location", ""),
+                                                        spent=float(body.get("spent") or 0),
+                                                        description=body.get("description", "")),
+            "/api/culture/events/announce": lambda: T.run("announce_event", event=body.get("event", "")),
+            "/api/culture/rsvp": lambda: T.run("rsvp_event", event=body.get("event", ""), answer=body.get("answer", ""),
+                                               guests=int(body.get("guests") or 0), note=body.get("note", "")),
+            "/api/culture/kudos": lambda: T.run("give_kudos", to=body.get("to", ""), message=body.get("message", ""),
+                                                value=body.get("value", "")),
+            "/api/culture/awards": lambda: T.run("nominate_for_award", award=body.get("award", ""),
+                                                 employee=body.get("employee", ""), reason=body.get("reason", ""),
+                                                 cycle=body.get("cycle", "")),
+            "/api/culture/awards/decide": lambda: T.run("decide_award", nomination_id=int(body.get("nomination_id") or 0),
+                                                        status=body.get("status", ""), note=body.get("note", "")),
+            "/api/culture/surveys": lambda: T.run("start_pulse_survey", title=body.get("title", ""),
+                                                  question=body.get("question", ""),
+                                                  scale_max=int(body.get("scale_max") or 5), closes=body.get("closes", "")),
+            "/api/culture/surveys/answer": lambda: T.run("answer_pulse_survey", survey_id=int(body.get("survey_id") or 0),
+                                                         score=int(body.get("score") or 0), comment=body.get("comment", "")),
+            "/api/culture/surveys/close": lambda: T.run("close_pulse_survey", survey_id=int(body.get("survey_id") or 0)),
+        }
+        if path not in calls:
+            return self._send(404, {"error": "not found"})
+        if path.startswith("/api/culture/events") or path in ("/api/culture/surveys", "/api/culture/surveys/close",
+                                                               "/api/culture/awards/decide"):
+            auth.require("events:manage")   # so the console gets a clean 403 rather than a tool error
+        return self._ok_or_error(calls[path]())
 
     def _post_projects(self, path, body):
         calls = {
@@ -317,7 +374,8 @@ class Handler(BaseHTTPRequestHandler):
             except auth.AuthError as exc:
                 return self._send(401, {"error": str(exc)})
             user = auth.user_for_token(token)
-            return self._send(200, {"username": user.username, "role": user.role},
+            return self._send(200, {"username": user.username, "role": user.role,
+                                    "employee_id": user.employee_id},
                               headers={"Set-Cookie": f"{COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800"})
         user = self._user()
         m = re.fullmatch(r"/a2a/(\w+)", path)
@@ -346,6 +404,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._post_payroll(path, body)
         if path.startswith("/api/projects/"):
             return self._post_projects(path, body)
+        if path.startswith("/api/culture/"):
+            return self._post_culture(path, body)
         if path == "/api/logout":
             auth.logout(self._token())
             return self._send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Max-Age=0; Path=/"})

@@ -212,7 +212,32 @@ and tickets and feedback.
   and gaps; a gap with nobody free to fill it is a hiring signal, next to the hiring funnel on the same dashboard.
 - Employees see and log only their own; staffing changes need `projects:manage` (admin, HR, manager).
 
-## 13. Phases
+## 13. Culture, recognition and HR activities (HR suite, phase 5)
+
+`hrai/engage.py`, the **culture agent**, 16 tools, the Culture page and two triggers (`culture_calendar` in the
+morning, `event_wrap_up` in the evening).
+
+- **Events** carry a kind, a day, a venue, an audience, a budget and spend. A budget over
+  `HRAI_EVENT_BUDGET_LIMIT` (₹25,000 by default) opens an `event_budget` approval, and `announce` refuses until a
+  human decides, so no event is announced on money nobody agreed to. Spend past 110% of the budget is refused too:
+  raise the budget, which goes through approval again.
+- **Announcing** drafts the all-hands invitation into the outbox and marks the event announced. As everywhere else in
+  the app, nothing is emailed by itself.
+- **RSVPs** are one row per person per event (yes, no, maybe, plus guests), upserted so changing your mind is normal.
+  Attendance counts heads including guests, and the response rate uses headcount.
+- **The calendar** merges events, public holidays and occasions. Occasions are birthdays and work anniversaries
+  computed from `employees.date_of_birth` and `joined_on` against the year the date next falls in (29 February lands
+  on 1 March), so no second table needs maintaining.
+- **Recognition** has two levels: kudos, which anyone can give to anyone but themselves and which cost nothing, and
+  awards, which anyone can nominate for but only HR decides; an award drafts a congratulations email.
+- **Pulse surveys** are one question on a 2-10 scale. Answers store a SHA-256 hash of the person and the survey
+  instead of their id, which stops a second answer without recording who answered, and results stay hidden until
+  three people have answered so a single answer cannot be picked out.
+- **Engagement numbers** (events, attendance, spend against budget, kudos reach, award states, pulse averages) feed
+  the HR dashboard: upcoming events and kudos become KPIs, and an event within a week that nobody has announced, or
+  an occasion in the next three days, becomes an attention item.
+
+## 14. Phases
 
 | Phase | Content | Status |
 | --- | --- | --- |
@@ -225,13 +250,13 @@ and tickets and feedback.
 | 7 | Insights and analytics dashboard; UI redesign | Done (HR suite phase 2) |
 | 8 | Salary management: CTC breakup, PF, ESI, professional tax, TDS, payslips, payroll approvals | Done (HR suite phase 3) |
 | 9 | Project management: projects, allocations, capacity and the bench, tasks, timesheets | Done (HR suite phase 4) |
-| 10 | Cultural events and HR activities | Next |
+| 10 | Cultural events and HR activities: events and budgets, RSVPs, kudos, awards, pulse surveys | Done (HR suite phase 5) |
 | 11 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Later |
 | 12 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
 
-## 14. What was tested, and what was not
+## 15. What was tested, and what was not
 
-**Tested (68 automated tests on Python 3.14.6, offline):**
+**Tested (82 automated tests on Python 3.14.6, offline):**
 - Login, hashing, lockout and roles
 - All four agents in rules-only mode
 - The LLM tool loop with a scripted model response
@@ -252,6 +277,10 @@ and tickets and feedback.
   refused), TDS spread across months, revisions behind approval, payslip privacy and the web API
 - Projects: the 100% allocation rule, releasing, capacity with approved leave, the bench, staffing gaps and
   suggestions, task status and overdue, timesheet limits, risks, the agent in rules mode, role checks and the API
+- Culture: a budget over the limit waiting for a human before anything is announced, runaway spend refused, RSVP
+  changes and counts, the calendar with holidays and occasions, kudos (including to yourself), awards needing HR, a
+  pulse survey staying hidden until three answers and refusing a second answer from the same person, role checks,
+  the triggers and the API
 - The full ticket workflow (gap → patch → worktree tests → review → approve → merge → closed, plus the reject and needs-human paths) in a repo where the app sits in a subfolder
 
 **Also checked by hand:** the MCP server over stdio with a real MCP client, the CrewAI wiring on Python 3.13 (crew assembly and tools, with the model call mocked), and MiniLM semantic search.

@@ -237,6 +237,11 @@ def projects_numbers():
             "risks": projects.risks()}
 
 
+def culture_numbers():
+    from . import engage
+    return engage.engagement()
+
+
 def operations():
     tickets = db.q("SELECT status, kind FROM tickets")
     fb = db.q("SELECT rating FROM feedback")
@@ -300,6 +305,16 @@ def attention(limit=12):
                     risk.get("project_id") or risk.get("employee_id"), risk["severity"])
     except Exception:  # projects are optional for the attention list
         pass
+    try:
+        from . import engage
+        for e in db.q("SELECT id, title, day FROM events WHERE status='planned' AND day BETWEEN ? AND ? "
+                      "AND COALESCE(budget_status,'') != 'pending_approval'",
+                      (t, (today + timedelta(days=7)).isoformat())):
+            add(3, f"{e['title']} is on {e['day']} and has not been announced", "culture", e["id"])
+        for o in engage.occasions(3):
+            add(3, f"{o['title']} on {o['day']}", "culture")      # a birthday has no page of its own to open
+    except Exception:  # culture is optional for the attention list
+        pass
     tk = db.q("SELECT id, title FROM tickets WHERE status='awaiting_approval'")
     for k in tk:
         add(3, f"Fix ready for review: ticket #{k['id']} {k['title']}", "tickets", k["id"])
@@ -319,7 +334,7 @@ def attention(limit=12):
 
 def overview(job_id=None):
     h, w, lv, ob, ai, ops = hiring(job_id), workforce(), leave(), onboarding(), ai_usage(), operations()
-    pay, prj = payroll_numbers(), projects_numbers()
+    pay, prj, cul = payroll_numbers(), projects_numbers(), culture_numbers()
     soon = (config.today() + timedelta(days=30)).isoformat()
     week = (config.today() + timedelta(days=7)).isoformat()
     t = config.today().isoformat()
@@ -336,11 +351,12 @@ def overview(job_id=None):
         "ai_spend_usd": ai["total"]["spent_usd"], "ai_budget_usd": ai["total"]["budget_usd"],
         "open_tickets": ops["open_tickets"],
         "payroll_net": pay["net"], "payroll_status": pay["status"], "payroll_month": pay["month"],
+        "events_upcoming": len(cul["upcoming"]), "kudos_90d": cul["kudos_90d"],
         "active_projects": prj["active"], "utilisation_pct": prj["utilisation"]["average_pct"],
         "bench": prj["utilisation"]["bench"], "overdue_tasks": prj["overdue_tasks"],
     }
     return {"as_of": t, "kpis": kpis, "attention": attention(), "hiring": h, "workforce": w, "leave": lv,
-            "onboarding": ob, "ai": ai, "operations": ops, "payroll": pay, "projects": prj}
+            "onboarding": ob, "ai": ai, "operations": ops, "payroll": pay, "projects": prj, "culture": cul}
 
 
 def narrate(data=None):
@@ -380,6 +396,10 @@ def narrate(data=None):
         lines.append(f"- Projects: {pj['active']} active, average utilisation {pj['utilisation']['average_pct']}%, "
                      f"{pj['utilisation']['bench']} on the bench, {pj['open_tasks']} open task(s) "
                      f"({pj['overdue_tasks']} overdue).")
+    cul = d["culture"]
+    if cul["events_this_year"] or cul["kudos_90d"]:
+        lines.append(f"- Culture: {len(cul['upcoming'])} event(s) coming up, {cul['kudos_90d']} kudos in 90 days across "
+                     f"{cul['people_recognised']} of {cul['headcount']} people.")
     lines.append(f"- AI spend this month: ${k['ai_spend_usd']:.2f} of ${k['ai_budget_usd']:.2f}. Open tickets: {k['open_tickets']}.")
     if d["attention"]:
         lines.append("Needs attention:")

@@ -311,7 +311,7 @@ class ProtocolTests(unittest.TestCase):
     def test_a2a_card_and_message(self):
         code, card, _ = self.req("/.well-known/agent-card.json")
         self.assertEqual(code, 200)
-        self.assertEqual({s["id"] for s in card["skills"]}, {"policy", "leave", "onboarding", "screening", "recruitment", "insights", "payroll", "projects"})
+        self.assertEqual({s["id"] for s in card["skills"]}, {"policy", "leave", "onboarding", "screening", "recruitment", "insights", "payroll", "projects", "culture"})
         client = a2a.A2AClient(self.token)
         task, answer = a2a.answer_of(client.send(self.base + "/a2a/policy", "How long is paternity leave?"))
         self.assertEqual(task["status"]["state"], "completed")

@@ -71,6 +71,23 @@ CREATE TABLE IF NOT EXISTS candidate_events (
 CREATE TABLE IF NOT EXISTS offers (
     id INTEGER PRIMARY KEY, candidate_id TEXT, job_id TEXT, ctc_lpa REAL, joining_date TEXT, status TEXT,
     approval_id INTEGER, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY, title TEXT, kind TEXT, day TEXT, start_time TEXT, location TEXT, organiser TEXT,
+    budget REAL DEFAULT 0, spent REAL DEFAULT 0, budget_status TEXT, approval_id INTEGER, description TEXT,
+    audience TEXT, status TEXT DEFAULT 'planned', created_by TEXT, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS event_rsvps (
+    event_id TEXT, employee_id TEXT, answer TEXT, guests INTEGER DEFAULT 0, note TEXT, created_at TEXT,
+    PRIMARY KEY (event_id, employee_id));
+CREATE TABLE IF NOT EXISTS kudos (
+    id INTEGER PRIMARY KEY, from_id TEXT, to_id TEXT, message TEXT, value TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS awards (
+    id INTEGER PRIMARY KEY, award TEXT, employee_id TEXT, reason TEXT, cycle TEXT, status TEXT, note TEXT,
+    nominated_by TEXT, decided_by TEXT, decided_at TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS surveys (
+    id INTEGER PRIMARY KEY, title TEXT, question TEXT, scale_max INTEGER DEFAULT 5, audience TEXT, closes TEXT,
+    status TEXT DEFAULT 'open', created_by TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS survey_answers (
+    id INTEGER PRIMARY KEY, survey_id INTEGER, respondent_hash TEXT, score INTEGER, comment TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY, name TEXT, client TEXT, manager TEXT, start_date TEXT, end_date TEXT,
     status TEXT DEFAULT 'active', health TEXT DEFAULT 'on_track', skills TEXT, notes TEXT, created_by TEXT,
@@ -111,7 +128,7 @@ MIGRATIONS = {
                    "stage": "TEXT DEFAULT 'applied'", "status_note": "TEXT", "created_at": "TEXT"},
     "jobs": {"rounds": "TEXT", "select_threshold": "INTEGER DEFAULT 70", "status": "TEXT DEFAULT 'open'"},
     "new_hires": {"candidate_id": "TEXT", "employee_id": "TEXT"},
-    "employees": {"skills": "TEXT"},
+    "employees": {"skills": "TEXT", "date_of_birth": "TEXT", "joined_on": "TEXT"},
 }
 
 
@@ -177,9 +194,10 @@ def seed_sample_data():
     for e in json.loads((D / "employees.json").read_text(encoding="utf-8")):
         b = e["leave_balance"]
         x("INSERT OR REPLACE INTO employees (id, name, email, department, level, manager, manager_email, annual, sick, "
-          "casual, skills) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          "casual, skills, date_of_birth, joined_on) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
           (e["id"], e["name"], e["email"], e.get("department"), e.get("level"), e["manager"],
-           e["manager_email"], b["annual"], b["sick"], b["casual"], json.dumps(e.get("skills", []))))
+           e["manager_email"], b["annual"], b["sick"], b["casual"], json.dumps(e.get("skills", [])),
+           e.get("date_of_birth"), e.get("joined_on")))
     for j in json.loads((D / "job_openings.json").read_text(encoding="utf-8")):
         x("INSERT OR REPLACE INTO jobs (id, title, location, min_years, must_have, nice_to_have, shortlist_size) "
           "VALUES (?,?,?,?,?,?,?)",
@@ -202,6 +220,7 @@ def seed_sample_data():
           "created_at) VALUES (?,?,?,?,?,?,?,?,?)",
           (f"C-{i:03d}", path.name, name.group(1).strip() if name else path.stem,
            email.group(1).strip() if email else None, text, job["id"] if job else None, now(), "applied", now()))
-    from . import payroll, projects
+    from . import engage, payroll, projects
     payroll.seed_sample_salaries()
     projects.seed_sample_projects()
+    engage.seed_sample_events()

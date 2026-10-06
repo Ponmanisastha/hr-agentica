@@ -219,3 +219,38 @@ def project_health():
         finally:
             auth._current.reset(reset)
     return {"risks": len(risks), "email_drafted": drafted}
+
+
+@triggers.schedule("culture_calendar", daily="08:15")
+def culture_calendar():
+    """Every morning: remind HR of events in the next 3 days and of birthdays and anniversaries today or tomorrow."""
+    from . import engage
+    today = config.today()
+    upcoming = [c for c in engage.calendar(3) if c["type"] == "event" and c["status"] in ("planned", "announced")]
+    occasions = [o for o in engage.occasions(1)]
+    if not upcoming and not occasions:
+        return {"events": 0, "occasions": 0}
+    reset = _as(auth.User(0, "trigger", "service"))
+    try:
+        lines = [f"- {c['day']}: {c['title']} ({c['attending']} attending, {c['responded']} replied)"
+                 for c in upcoming] + [f"- {o['day']}: {o['title']}" for o in occasions]
+        T.run("draft_email", to=config.env("HRAI_HR_EMAIL", "hr@example.com"),
+              subject=f"Coming up: {len(upcoming)} event(s), {len(occasions)} occasion(s)",
+              body=f"For the next few days from {today}:\n" + "\n".join(lines))
+    finally:
+        auth._current.reset(reset)
+    return {"events": len(upcoming), "occasions": len(occasions)}
+
+
+@triggers.schedule("event_wrap_up", daily="19:00")
+def event_wrap_up():
+    """Every evening: mark yesterday's events done, and close pulse surveys that have reached their closing date."""
+    from . import engage
+    today = config.today().isoformat()
+    done = db.q("SELECT id FROM events WHERE day < ? AND status IN ('planned','announced')", (today,))
+    for e in done:
+        db.x("UPDATE events SET status='done', updated_at=? WHERE id=?", (db.now(), e["id"]))
+    closed = db.q("SELECT id FROM surveys WHERE status='open' AND closes < ?", (today,))
+    for s in closed:
+        engage.close_survey(s["id"])
+    return {"events_closed": len(done), "surveys_closed": len(closed)}

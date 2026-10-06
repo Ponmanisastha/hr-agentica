@@ -394,6 +394,9 @@ def decide_approval(approval_id, approve, note=""):
     if a["kind"] == "offer":
         from . import hiring
         hiring.on_offer_decision(int(a["ref"]), approve)
+    if a["kind"] == "event_budget":
+        from . import engage
+        engage.on_budget_decision(a["ref"], approve)
     if a["kind"] == "salary_revision":
         from . import payroll
         payroll.on_revision_decision(int(a["ref"]), approve)
@@ -510,7 +513,8 @@ def hr_insights(section: str = "", job_id: str = "") -> dict:
     from . import insights
     fns = {"hiring": lambda: insights.hiring(job_id or None), "workforce": insights.workforce, "leave": insights.leave,
            "onboarding": insights.onboarding, "ai": insights.ai_usage, "operations": insights.operations,
-           "payroll": insights.payroll_numbers, "projects": insights.projects_numbers}
+           "payroll": insights.payroll_numbers, "projects": insights.projects_numbers,
+           "culture": insights.culture_numbers}
     if section:
         if section not in fns:
             return {"error": f"Unknown section {section!r}; use one of {', '.join(fns)}"}
@@ -768,3 +772,121 @@ def log_project_hours(project: str, day: str, hours: float, employee: str = "", 
 def project_timesheet(project: str = "", employee: str = "", days: int = 7) -> dict:
     """Hours logged over the last few days, by project and by person."""
     return _proj(lambda p: p.timesheet, employee or None, project or None, days)
+
+
+# ---------------------------------------------------------------- culture: events, recognition, pulse
+
+def _eng(fn, *args, **kwargs):
+    from . import engage
+    try:
+        return fn(engage)(*args, **kwargs)
+    except engage.EngageError as exc:
+        return {"error": str(exc)}
+
+
+@hr_tool(ALL_ROLES)
+def events_calendar(days_ahead: int = 60) -> dict:
+    """What is coming up: events, public holidays, birthdays and work anniversaries."""
+    return {"calendar": _eng(lambda e: e.calendar, days_ahead)}
+
+
+@hr_tool(ALL_ROLES)
+def event_details(event: str) -> dict:
+    """One event with who has said yes, no or maybe."""
+    return _eng(lambda e: e.event_details, event)
+
+
+@hr_tool(HR_ROLES)
+def create_event(title: str, day: str, kind: str = "celebration", location: str = "", organiser: str = "",
+                 budget: float = 0, description: str = "", start_time: str = "") -> dict:
+    """Plan an event (festival, town_hall, offsite, training, volunteering, celebration, sports, other).
+    A budget past the limit goes to approval before the event can be announced."""
+    return _eng(lambda e: e.create_event, title, day, kind, location, organiser, budget, description,
+                start_time=start_time)
+
+
+@hr_tool(HR_ROLES)
+def update_event(event: str, status: str = "", day: str = "", location: str = "", spent: float = 0,
+                 description: str = "") -> dict:
+    """Change an event: status (planned, announced, done, cancelled), date, location, spend or description."""
+    return _eng(lambda e: e.update_event, event, status=status, day=day, location=location,
+                spent=spent or None, description=description)
+
+
+@hr_tool(HR_ROLES)
+def announce_event(event: str) -> dict:
+    """Draft the invitation for the whole company and mark the event announced. The email waits in the outbox."""
+    return _eng(lambda e: e.announce, event)
+
+
+@hr_tool(ALL_ROLES)
+def rsvp_event(event: str, answer: str, guests: int = 0, note: str = "", employee: str = "") -> dict:
+    """Answer an invitation: yes, no or maybe. Employees answer for themselves."""
+    user = auth.current_user()
+    if user.role not in HR_ROLES and employee and employee != user.employee_id:
+        return {"error": "You can only answer for yourself"}
+    return _eng(lambda e: e.rsvp, event, answer, employee if user.role in HR_ROLES else "", guests, note)
+
+
+@hr_tool(ALL_ROLES)
+def give_kudos(to: str, message: str, value: str = "") -> dict:
+    """Thank a colleague publicly for something they did."""
+    return _eng(lambda e: e.give_kudos, to, message, "", value)
+
+
+@hr_tool(ALL_ROLES)
+def kudos_wall(days: int = 90, employee: str = "") -> dict:
+    """Recent kudos across the company, and who has been thanked most."""
+    return _eng(lambda e: e.kudos_wall, days, employee)
+
+
+@hr_tool(ALL_ROLES)
+def nominate_for_award(award: str, employee: str, reason: str, cycle: str = "") -> dict:
+    """Nominate someone for an award. HR decides the result; nothing is awarded automatically."""
+    return _eng(lambda e: e.nominate, award, employee, reason, cycle)
+
+
+@hr_tool(HR_ROLES)
+def decide_award(nomination_id: int, status: str, note: str = "") -> dict:
+    """Move a nomination to shortlisted, awarded or declined. An award drafts a congratulations email."""
+    return _eng(lambda e: e.decide_award, nomination_id, status, note)
+
+
+@hr_tool(ALL_ROLES)
+def list_awards(cycle: str = "", status: str = "") -> dict:
+    """Award nominations and winners."""
+    return {"awards": _eng(lambda e: e.awards, cycle, status)}
+
+
+@hr_tool(HR_ROLES)
+def start_pulse_survey(title: str, question: str, scale_max: int = 5, closes: str = "") -> dict:
+    """Start a one-question pulse survey. Answers are anonymous and results appear once three people have answered."""
+    return _eng(lambda e: e.start_survey, title, question, scale_max, closes or None)
+
+
+@hr_tool(ALL_ROLES)
+def answer_pulse_survey(survey_id: int, score: int, comment: str = "") -> dict:
+    """Answer a pulse survey. Your identity is stored only as a hash, so answers cannot be traced back to you."""
+    return _eng(lambda e: e.answer_survey, survey_id, score, comment)
+
+
+@hr_tool(ALL_ROLES)
+def pulse_results(survey_id: int = 0) -> dict:
+    """Results of a pulse survey, or the list of open ones."""
+    from . import engage
+    if not survey_id:
+        return {"surveys": engage.surveys(True)}
+    return _eng(lambda e: e.survey_results, survey_id)
+
+
+@hr_tool(HR_ROLES)
+def close_pulse_survey(survey_id: int) -> dict:
+    """Close a survey and return its results."""
+    return _eng(lambda e: e.close_survey, survey_id)
+
+
+@hr_tool(HR_ROLES)
+def engagement_report() -> dict:
+    """Culture in numbers: events and attendance, spend against budget, kudos, awards and pulse scores."""
+    from . import engage
+    return {"summary": engage.summary(), "engagement": engage.engagement()}

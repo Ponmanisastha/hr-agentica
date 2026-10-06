@@ -13,6 +13,7 @@
   python app.py hiring ingest [--job JOB-101] | board | followups | rounds JOB-101 L1 L2 L3 HR Final | sample
   python app.py projects [board] | capacity | risks | tasks         projects, staffing and capacity
   python app.py payroll run|show|submit|paid REF|slip E101 [--month 2026-10]     salary and payroll
+  python app.py culture [summary] | calendar | kudos | awards | pulse    events, recognition and pulse
   python app.py insights [--job JOB-101] | attention | report | csv     HR analytics; csv prints the pipeline
   python app.py index                      rebuild vectors and the knowledge graph
   python app.py a2a send URL "<text>" --token T   call any A2A agent
@@ -107,6 +108,11 @@ def demo():
     print("PAYROLL: salary breakup, a draft run, and the approval it waits on")
     for r in ["What is the breakup for a 12 lakh CTC?", f"Run payroll for {config.today().strftime('%Y-%m')}",
               "Submit the payroll for approval"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
+    print("CULTURE: what is coming up, kudos, and an event whose budget needs a human")
+    for r in ["What is coming up this month?", "Kudos to Deepa Sharma for fixing the payroll run",
+              f"Plan a team lunch on {nxt(20)} with a budget of 40000"]:
         print_result(r, G.handle(r, user=user, channel="cli"))
     print("=" * 78)
     print("INSIGHTS: numbers and what needs attention (the web console's Dashboard shows the same)")
@@ -291,6 +297,30 @@ def main(argv):
                 print(json.dumps({k: v for k, v in s.items() if k != "payslips"}, indent=2, default=str))
                 for p in s.get("payslips", []):
                     print(f"  {p['employee_id']:6} {p['name']:22} net {p['net']:>12,}")
+        finally:
+            auth._current.reset(token)
+    elif cmd == "culture":
+        from hrai import engage
+        sub = args[0] if args else "summary"
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "calendar":
+                for c in engage.calendar(60):
+                    extra = (f"{c['status']}, {c['attending']} attending" if c["type"] == "event" else c["type"])
+                    print(f"{c['day']}  {c['title']:40} {extra}")
+            elif sub == "kudos":
+                for k in engage.kudos_wall()["kudos"]:
+                    print(f"{k['created_at'][:10]}  {k['to_name']:20} {k['message'][:60]}  (from {k['from_name'] or 'the team'})")
+            elif sub == "awards":
+                for x in engage.awards():
+                    print(f"#{x['id']:<4} {x['award']:28} {x['name']:20} {x['cycle']:8} {x['status']}")
+            elif sub == "pulse":
+                for s_ in engage.surveys(False):
+                    res = engage.survey_results(s_["id"])
+                    print(f"#{s_['id']:<3} {s_['title']:22} {s_['question'][:46]:46} "
+                          + (res.get("note") or f"{res['average']}/{res['scale_max']} from {res['answers']}"))
+            else:
+                print(engage.summary())
         finally:
             auth._current.reset(token)
     elif cmd == "insights":

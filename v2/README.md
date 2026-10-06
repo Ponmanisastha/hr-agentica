@@ -39,7 +39,7 @@ python app.py budget                                # spend vs budget per agent
 python app.py budget set screening 20 --on-exceed block
 ```
 
-Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Projects, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
+Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Projects, Culture, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
 
 ## Hiring pipeline
 
@@ -102,6 +102,27 @@ python app.py ask "What is slipping?"
 A project lists the skills it needs; when nobody on it has one, the Projects page says so and names people who are
 free and do. Managers get the Projects page; employees see their own projects and log their own hours.
 
+## Culture, recognition and HR activities
+
+Events (festivals, town halls, offsites, training, volunteering, sports) carry a budget, an audience and RSVPs. A
+budget over the limit (`HRAI_EVENT_BUDGET_LIMIT`, ₹25,000 by default) goes to **Approvals** first, and nothing is
+announced until a human says yes. The invitation itself is a draft in the outbox; the app never emails anyone.
+
+```bash
+python app.py culture                  # events this year, spend against budget, kudos, pulse scores
+python app.py culture calendar         # events, public holidays, birthdays and work anniversaries
+python app.py culture kudos            # the kudos wall
+python app.py culture awards           # nominations and winners
+python app.py culture pulse            # survey results, once three people have answered
+python app.py ask "Plan a Diwali lunch on 2026-11-08 with a budget of 20000"
+python app.py ask "Kudos to Deepa for covering the on-call weekend"
+python app.py ask "What is coming up this month?"
+```
+
+Anyone can send kudos, nominate a colleague for an award and answer a pulse survey; HR decides awards and starts
+surveys. Pulse answers keep only a hash of who answered, and results stay hidden until three people have answered, so
+no single answer can be traced back. The **Culture** page shows all of it.
+
 ## Salary and payroll
 
 Indian payroll: CTC breakup (basic, HRA, special allowance, employer PF, gratuity), employee PF and ESI, professional
@@ -151,7 +172,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 68 tests, offline, about 18 seconds
+python -m unittest discover -s tests -t .     # 82 tests, offline, about 21 seconds
 ```
 
 ## Layout
@@ -167,6 +188,7 @@ python -m unittest discover -s tests -t .     # 68 tests, offline, about 18 seco
 | `hrai/insights.py` | HR analytics, the needs-attention list, daily report, CSV export |
 | `hrai/payroll.py` | Salary structures, Indian payroll, payslips, payroll runs |
 | `hrai/projects.py` | Projects, allocations, capacity and the bench, tasks, timesheets |
+| `hrai/engage.py` | Events and budgets, RSVPs, kudos, awards, anonymous pulse surveys |
 | `hrai/auth.py`, `hrai/db.py` | Logins and roles; SQLite schema |
 | `hrai/hooks.py`, `hooks.d/` | Hooks |
 | `hrai/triggers.py`, `hrai/automations.py` | Triggers |

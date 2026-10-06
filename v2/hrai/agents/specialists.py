@@ -172,7 +172,21 @@ PROJECTS = Spec(
     examples=["Who is free next month?", "Put Deepa on the portal project at 40%", "What is slipping?",
               "Show the portal project"])
 
-SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT, INSIGHTS, PAYROLL, PROJECTS)}
+CULTURE = Spec(
+    "culture", "Culture and engagement agent",
+    "Cultural events and celebrations, RSVPs, kudos and awards, pulse surveys, birthdays and work anniversaries.",
+    "fast",
+    ["events_calendar", "event_details", "create_event", "update_event", "announce_event", "rsvp_event", "give_kudos",
+     "kudos_wall", "nominate_for_award", "decide_award", "list_awards", "start_pulse_survey", "answer_pulse_survey",
+     "pulse_results", "close_pulse_survey", "engagement_report", "draft_email", "load_skill", "report_issue"],
+    "You are the culture and engagement agent. Use the tools for every date, number and name. An event invitation is "
+    "drafted into the outbox for a person to send, never sent by you, and a budget past the limit waits for approval, "
+    "so say what is waiting. Pulse answers are anonymous: never guess who said what, and do not report results until "
+    "the tool returns them. Keep answers short and warm without being gushing. Follow the culture-events skill.",
+    examples=["What is coming up this month?", "Plan a Diwali lunch on 2026-10-20 with a 20000 budget",
+              "Kudos to Deepa for the payroll migration", "Whose birthday is coming up?"])
+
+SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT, INSIGHTS, PAYROLL, PROJECTS, CULTURE)}
 
 
 # ---------------------------------------------------------------- rules-only plans (no model)
@@ -322,7 +336,7 @@ def plan_insights(run, request):
         items = run.call("needs_attention")["items"]
         return ("Needs attention:\n" + "\n".join(f"{i + 1}. {a['text']}" for i, a in enumerate(items))) if items \
             else "Nothing needs attention right now."
-    for section, pattern in (("payroll", r"payroll|salary cost|wage bill"), ("projects", r"project|utilisation|bench"), ("ai", r"\bai\b|budget|spend|token"), ("leave", r"leave"),
+    for section, pattern in (("payroll", r"payroll|salary cost|wage bill"), ("projects", r"project|utilisation|bench"), ("culture", r"event|culture|kudos|engagement"), ("ai", r"\bai\b|budget|spend|token"), ("leave", r"leave"),
                              ("onboarding", r"onboarding"), ("workforce", r"headcount|department|workforce|joiners")):
         if re.search(pattern, t):
             data = run.call("hr_insights", section=section)
@@ -486,6 +500,63 @@ def _project_summary(run):
     return "\n".join(lines)
 
 
+def plan_culture(run, request):
+    t = request.lower()
+    if re.search(r"kudos|thank|appreciat|shout ?out|well done", t):
+        m = re.search(r"(?:kudos|thanks|thank you|shout ?out)\s+(?:to\s+)?"
+                      r"([A-Za-z][\w.]*(?:\s+[A-Z][\w.]*)??)\s+for\s+(.*)", request, re.I)
+        if m and m.group(2).strip():
+            out = run.call("give_kudos", to=m.group(1).strip(), message=m.group(2).strip())
+            return out.get("error") or f"Kudos to {out['to']} recorded: \u201c{out['message']}\u201d."
+        wall = run.call("kudos_wall")
+        return "\n".join(f"- {k['to_name']} from {k['from_name'] or 'the team'}: {k['message']}" for k in wall["kudos"][:10]) \
+            or "No kudos yet. Be the first."
+    if re.search(r"birthday|anniversar", t):
+        occ = [c for c in run.call("events_calendar", days_ahead=45)["calendar"] if c["type"] == "occasion"]
+        return "\n".join(f"- {o['day']}: {o['title']}" for o in occ) or "No birthdays or anniversaries in the next 45 days."
+    if re.search(r"\bplan\b|organis|organiz|\bschedule\b.*event|create.*event", t):
+        when = re.search(r"(\d{4}-\d{2}-\d{2})", request)
+        budget = re.search(r"(?:budget\s*(?:of\s*)?|₹|rs\.?\s*)([\d,]+)", request, re.I)
+        title = re.sub(r"^(?:can you\s+)?(?:plan|organise|organize|schedule|create)\s+(?:an?\s+)?", "", request, flags=re.I)
+        title = re.split(r"\s+on\s+\d{4}-|\s+with\s+", title)[0].strip(" .?")
+        if when and title:
+            kind = next((k for k in ("festival", "town_hall", "offsite", "training", "volunteering", "sports")
+                         if k.replace("_", " ") in t), "celebration")
+            out = run.call("create_event", title=title, day=when.group(1), kind=kind,
+                           budget=float(budget.group(1).replace(",", "")) if budget else 0)
+            if "error" in out:
+                return out["error"]
+            msg = f"{out['title']} is planned for {out['day']}."
+            if out.get("approval_id"):
+                msg += f" The ₹{out['budget']:,.0f} budget needs approval (#{out['approval_id']}) before it is announced."
+            else:
+                msg += " Announce it when you are ready and the invitation will be drafted in the outbox."
+            return msg
+    if re.search(r"rsvp|coming|attend", t) and re.search(r"\byes\b|\bno\b|maybe", t):
+        answer = "yes" if re.search(r"\byes\b|count me in|i(?:'| a)m coming", t) else "no" if re.search(r"\bno\b", t) else "maybe"
+        name = re.search(r"(?:to|for)\s+(?:the\s+)?([\w \-]+?)(?:[.?]|$)", request, re.I)
+        if name:
+            out = run.call("rsvp_event", event=name.group(1).strip(), answer=answer)
+            return out.get("error") or f"Noted: {answer} to {out['title']} ({out['attending']['headcount']} attending)."
+    if re.search(r"survey|pulse|how is everyone|mood", t):
+        out = run.call("pulse_results")
+        if "surveys" in out:
+            return "\n".join(f"#{s['id']} {s['title']}: {s['answers']} answer(s), closes {s['closes']}"
+                             for s in out["surveys"]) or "No pulse survey is open."
+        return str(out)
+    cal = run.call("events_calendar", days_ahead=45)["calendar"]
+    if not cal:
+        return "Nothing is planned in the next 45 days."
+    lines = []
+    for c in cal[:12]:
+        if c["type"] == "event":
+            lines.append(f"- {c['day']}: {c['title']} ({c['kind'].replace('_', ' ')}, {c['status']}, "
+                         f"{c['attending']} attending)")
+        else:
+            lines.append(f"- {c['day']}: {c['title']}")
+    return "\n".join(lines)
+
+
 PLANS = {"policy": plan_policy, "leave": plan_leave, "onboarding": plan_onboarding, "screening": plan_screening,
          "recruitment": plan_recruitment, "insights": plan_insights, "payroll": plan_payroll,
-         "projects": plan_projects}
+         "projects": plan_projects, "culture": plan_culture}

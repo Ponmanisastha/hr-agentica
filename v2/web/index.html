@@ -269,6 +269,7 @@
             <div class="card tile"><div class="label">Leave requests pending</div><div id="kLeave" class="value">–</div><div id="kLeaveNote" class="note"></div></div>
             <div class="card tile"><div class="label">Onboarding tasks done</div><div id="kOnb" class="value">–</div><div id="kOnbMeter" class="meter" style="margin-top:10px"><span></span></div><div id="kOnbNote" class="note"></div></div>
             <div class="card tile"><div class="label">Projects</div><div id="kProj" class="value">–</div><div id="kProjNote" class="note"></div></div>
+            <div class="card tile"><div class="label">Events coming up</div><div id="kEvents" class="value">–</div><div id="kEventsNote" class="note"></div></div>
             <div class="card tile"><div class="label">Open tickets</div><div id="kTickets" class="value">–</div><div id="kTicketsNote" class="note"></div></div>
           </div>
           <div class="grid g3" style="margin-top:16px">
@@ -335,6 +336,33 @@
           </div>
         </div>
         <div id="jDetail"></div>
+      </section>
+
+      <!-- culture -->
+      <section id="culture" class="hidden">
+        <div class="filters">
+          <button id="cNew" class="btn primary hidden">Plan an event</button>
+          <button id="cSurveyNew" class="btn hidden">Start a pulse survey</button>
+          <button id="cRefresh" class="btn">Refresh</button>
+          <span id="cStats" class="muted asof"></span>
+        </div>
+        <div id="cMsg" class="muted" style="margin-bottom:12px"></div>
+        <div class="grid g2" style="align-items:start">
+          <div class="card"><div class="card-head"><div><h3>What's coming up</h3><div class="sub">Events, holidays, birthdays and work anniversaries</div></div></div><ul id="cCal" class="attn"></ul></div>
+          <div>
+            <div class="card"><div class="card-head"><div><h3>Kudos</h3><div class="sub">Thank a colleague; everyone sees it</div></div></div>
+              <div class="grid2" style="margin-top:4px">
+                <label class="f"><div>To</div><input id="kTo" placeholder="Name or employee id"></label>
+                <label class="f"><div>What they did</div><input id="kMsg" placeholder="Stayed late to fix the payroll run"></label>
+                <button id="kSend" class="btn primary">Send kudos</button>
+              </div>
+              <ul id="cKudos" class="attn" style="margin-top:12px"></ul>
+            </div>
+            <div class="card"><div class="card-head"><div><h3>Pulse</h3><div class="sub">One question, answers are anonymous</div></div></div><div id="cSurveys"></div></div>
+            <div class="card"><div class="card-head"><div><h3>Awards</h3><div class="sub">Nominations and winners</div></div></div><div id="cAwards" class="table-wrap"></div></div>
+          </div>
+        </div>
+        <div id="cDetail"></div>
       </section>
 
       <!-- payroll -->
@@ -416,18 +444,19 @@ const ICONS = {
   payroll:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
   mypay:'<path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
   projects:'<path d="M3 7h7l2 2h9v10a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M8 13h8"/>',
+  culture:'<path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z"/>',
 };
 const HR = r => ['admin','hr'].includes(r);
 const MGR = r => ['admin','hr','manager'].includes(r);
 const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['hiring','Hiring',HR],['projects','Projects',MGR],['payroll','Payroll',HR],
-              ['mypay','My pay',r=>!HR(r)],['approvals','Approvals',MGR],
+              ['culture','Culture',()=>true],['mypay','My pay',r=>!HR(r)],['approvals','Approvals',MGR],
               ['tickets','Tickets',HR],['budget','AI budget',HR],['outbox','Outbox',HR]];
 function show(tab) {
   TABS.forEach(([id]) => $(id).classList.toggle('hidden', id !== tab));
   [...$('nav').children].forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'); });
   $('pageTitle').textContent = (TABS.find(t => t[0] === tab) || [])[1] || '';
   store.set('hr-tab', tab);
-  ({dashboard:loadDashboard, hiring:loadHiring, projects:loadProjects, payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
+  ({dashboard:loadDashboard, hiring:loadHiring, projects:loadProjects, culture:loadCulture, payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
 }
 function start(user) {
   me = user; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -585,13 +614,15 @@ async function loadDashboard() {
     : `payroll ${monthLabel(k.payroll_month)}: ${inr(k.payroll_net)} ${PSTATUS[k.payroll_status] || k.payroll_status}`; $('kLeave').textContent = fmt(k.leave_pending); $('kLeaveNote').textContent = `${d.leave.upcoming_days_30} approved days in the next 30`;
   const ob = d.onboarding; $('kOnb').textContent = ob.pct_done === null ? '–' : ob.pct_done + '%'; $('kOnbMeter').firstElementChild.style.width = (ob.pct_done || 0) + '%';
   $('kOnbNote').textContent = ob.tasks ? `${ob.done} of ${ob.tasks} · ${ob.blocked} blocked · ${ob.overdue} overdue` : 'No onboarding tasks yet';
+  $('kEvents').textContent = fmt(k.events_upcoming); $('kEventsNote').textContent = `${k.kudos_90d} kudos in the last 90 days`;
   $('kProj').textContent = fmt(d.projects.open_tasks); $('kProj').previousElementSibling.textContent = 'Open project tasks';
   $('kTickets').textContent = fmt(k.open_tickets); $('kTicketsNote').textContent = d.operations.helpful_pct === null ? 'no answer feedback yet' : `${d.operations.helpful_pct}% of answers rated helpful`;
 
   const attn = $('dAttn'); attn.replaceChildren();
   if (!d.attention.length) { const li = el('li'); li.append(statusTag('good'), el('span', 'Nothing needs attention right now.', 'txt')); attn.append(li); }
   d.attention.forEach(a => { const li = el('li'); const go = el('button', 'Open', 'btn ghost');
-    go.onclick = () => { show(a.tab); if (a.tab === 'hiring' && a.ref) setTimeout(() => candidate(a.ref), 300); if (a.tab === 'tickets' && a.ref) ticket(a.ref); };
+    go.onclick = () => { show(a.tab); if (a.tab === 'hiring' && a.ref) setTimeout(() => candidate(a.ref), 300); if (a.tab === 'tickets' && a.ref) ticket(a.ref);
+      if (a.tab === 'culture' && a.ref) setTimeout(() => eventDetail(a.ref), 400); };
     li.append(statusTag(a.kind), el('span', a.text, 'txt'), go); attn.append(li); });
 
   hbars('cFunnel', h.funnel.map(f => ({label:f.label, value:f.count, tip:`${f.label} · ${f.pct_of_applied}% of applicants`})), {empty:'No candidates yet. Drop resumes on the Hiring tab.'});
@@ -634,8 +665,8 @@ $('dJob').onchange = loadDashboard; $('dRefresh').onclick = loadDashboard;
 // ---------------------------------------------------------------- assistant
 function examples() {
   const list = HR(me.role) ? ['What needs my attention today?', 'How is hiring going?', 'Who is free next month?', 'What is slipping?', 'Run payroll for this month']
-    : MGR(me.role) ? ['Who is free next month?', 'What is slipping?', 'Show my projects', 'How many casual leave days do we get?']
-    : ['How many casual leave days do we get?', 'Show my projects', 'Show my payslip', 'I need casual leave on 2026-10-08'];
+    : MGR(me.role) ? ['Who is free next month?', 'What is slipping?', 'Show my projects', 'What is coming up this month?']
+    : ['How many casual leave days do we get?', 'What is coming up this month?', 'Show my payslip', 'I need casual leave on 2026-10-08'];
   $('examples').replaceChildren(...list.map(x => { const c = el('button', x, 'chip'); c.onclick = () => { $('q').value = x; $('send').click(); }; return c; }));
 }
 $('send').onclick = async () => {
@@ -769,6 +800,158 @@ async function projectDetail(id) {
   d.events.forEach(e => { const li = el('li'); li.append(el('div', `${e.event.replace(/_/g, ' ')}${e.detail ? ': ' + e.detail : ''}`), el('div', `${e.ts.replace('T', ' ')} · ${e.actor}`, 'muted')); ul.append(li); });
   box.append(ul);
   $('jDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+// ---------------------------------------------------------------- culture
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
+const EVENT_ICON = {festival:'🎉', town_hall:'🏛️', offsite:'🚌', training:'📚', volunteering:'🤝', celebration:'🎂', sports:'⚽', other:'📌'};
+let cData = null;
+async function loadCulture() {
+  $('cNew').classList.toggle('hidden', !HR(me.role)); $('cSurveyNew').classList.toggle('hidden', !HR(me.role));
+  let d; try { d = await api('/api/culture'); } catch (e) { return $('cMsg').textContent = e.message; }
+  cData = d;
+  const en = d.engagement;
+  $('cStats').textContent = en ? `${plural(en.events_this_year, 'event')} this year · ₹${en.spent_this_year.toLocaleString('en-IN')} of ₹${en.budget_this_year.toLocaleString('en-IN')} spent · ${plural(en.kudos_90d, 'kudos', 'kudos')} in 90 days` : '';
+  const cal = $('cCal'); cal.replaceChildren();
+  if (!d.calendar.length) cal.append(Object.assign(el('li'), {textContent:'Nothing planned in the next 60 days.'}));
+  d.calendar.forEach(c => {
+    const li = el('li'); const left = el('span', c.type === 'event' ? EVENT_ICON[c.kind] || '📌' : c.type === 'holiday' ? '🏖️' : '🎈');
+    left.style.fontSize = '16px';
+    const txt = el('div', undefined, 'txt'); txt.append(el('div', c.title));
+    const bits = [c.day]; if (c.type === 'event') { bits.push(c.status); if (c.location) bits.push(c.location);
+      bits.push(c.responded ? `${c.attending} coming of ${plural(c.responded, 'reply', 'replies')}` : 'no replies yet');
+      if (c.budget) bits.push(`₹${c.budget.toLocaleString('en-IN')}`); }
+    txt.append(el('div', bits.join(' · '), 'muted'));
+    li.append(left, txt);
+    if (c.type === 'event') {
+      if (c.budget_status === 'pending_approval') li.append(statusTag('warning', 'Budget waiting'));
+      const b = el('button', 'Open', 'btn ghost'); b.onclick = () => eventDetail(c.id); li.append(b);
+    }
+    cal.append(li);
+  });
+  const kw = $('cKudos'); kw.replaceChildren();
+  if (!d.kudos.kudos.length) kw.append(Object.assign(el('li'), {textContent:'No kudos yet. Be the first.'}));
+  d.kudos.kudos.slice(0, 8).forEach(k => { const li = el('li'); const t = el('div', undefined, 'txt');
+    t.append(el('div', `${k.to_name} — ${k.message}`), el('div', `from ${k.from_name || 'the team'} · ${k.created_at.slice(0, 10)}`, 'muted'));
+    li.append(el('span', '👏'), t); kw.append(li); });
+  const sv = $('cSurveys'); sv.replaceChildren();
+  if (!d.surveys.length) sv.append(el('div', 'No pulse survey is open.', 'empty'));
+  d.surveys.forEach(s => {
+    const box = el('div'); box.style.cssText = 'border-top:1px solid var(--grid);padding:10px 0';
+    box.append(el('div', s.question), el('div', `${s.title} · closes ${s.closes} · ${s.answers} answer(s)`, 'muted'));
+    const row = el('div', undefined, 'row'); row.style.marginTop = '8px';
+    for (let i = 1; i <= s.scale_max; i++) { const b = el('button', String(i), 'btn');
+      b.onclick = async () => { try { await api('/api/culture/surveys/answer', {survey_id:s.id, score:i}); $('cMsg').textContent = 'Thanks, your answer is anonymous.'; loadCulture(); }
+        catch (e) { $('cMsg').textContent = e.message; } }; row.append(b); }
+    const res = el('button', 'Results', 'btn ghost'); res.onclick = () => surveyResults(s.id); row.append(res);
+    if (HR(me.role)) { const cl = el('button', 'Close', 'btn ghost');
+      cl.onclick = async () => { await api('/api/culture/surveys/close', {survey_id:s.id}); loadCulture(); }; row.append(cl); }
+    box.append(row); sv.append(box);
+  });
+  const at = el('table'); const ah = el('tr'); ['Award','Who','Cycle','Status',''].forEach(h => ah.append(el('th', h))); at.append(ah);
+  d.awards.forEach(a => { const tr = el('tr'); tr.append(el('td', a.award), el('td', a.name), el('td', a.cycle));
+    const st = el('td'); st.append(el('span', a.status, 'pill')); tr.append(st);
+    const act = el('td');
+    if (HR(me.role) && a.status !== 'awarded' && a.status !== 'declined') {
+      [['Award', 'awarded'], ['Decline', 'declined']].forEach(([label, status]) => { const b = el('button', label, 'btn ghost');
+        b.onclick = async () => { await api('/api/culture/awards/decide', {nomination_id:a.id, status}); loadCulture(); }; act.append(b); });
+    }
+    tr.append(act); at.append(tr); });
+  const nominate = el('div', undefined, 'grid2'); nominate.style.marginTop = '10px';
+  const aw = inp('text', 'Award, e.g. Star of the month'), who = inp('text', 'Name or employee id'), why = inp('text', 'Why');
+  const nb = el('button', 'Nominate', 'btn');
+  nb.onclick = async () => { try { await api('/api/culture/awards', {award:aw.value, employee:who.value, reason:why.value}); loadCulture(); }
+    catch (e) { $('cMsg').textContent = e.message; } };
+  nominate.append(field('Award', aw), field('Person', who), field('Reason', why), nb);
+  $('cAwards').replaceChildren(d.awards.length ? at : el('div', 'No nominations yet.', 'empty'), nominate);
+}
+$('cRefresh').onclick = loadCulture;
+$('kSend').onclick = async () => {
+  try { await api('/api/culture/kudos', {to:$('kTo').value, message:$('kMsg').value}); $('kTo').value = ''; $('kMsg').value = ''; $('cMsg').textContent = 'Kudos sent.'; loadCulture(); }
+  catch (e) { $('cMsg').textContent = e.message; }
+};
+$('cNew').onclick = () => {
+  const box = el('div', undefined, 'card'); const head = el('div', undefined, 'card-head'); const hd = el('div'); hd.append(el('h3', 'Plan an event'));
+  const close = el('button', 'Close', 'btn ghost'); close.onclick = () => $('cDetail').replaceChildren(); head.append(hd, close);
+  const grid = el('div', undefined, 'grid2'); grid.style.marginTop = '12px';
+  const kind = el('select'); ['celebration','festival','town_hall','offsite','training','volunteering','sports','other'].forEach(k => { const o = el('option', k.replace('_', ' ')); o.value = k; kind.append(o); });
+  const f = {title:inp('text','Diwali celebration'), day:inp('date'), start_time:inp('time'), location:inp('text','Office atrium'),
+             organiser:inp('text','Who is running it'), budget:inp('number','20000'), description:inp('text','What is happening')};
+  const labels = {title:'Title', day:'Day', start_time:'Starts', location:'Where', organiser:'Organiser', budget:'Budget (₹)', description:'Description'};
+  grid.append(field('Kind', kind)); Object.entries(f).forEach(([k, i]) => grid.append(field(labels[k], i)));
+  const say = el('div', '', 'muted'); const go = el('button', 'Create event', 'btn primary');
+  go.onclick = async () => { try { const body = {kind:kind.value}; Object.entries(f).forEach(([k, i]) => body[k] = i.value);
+      const out = await api('/api/culture/events', body); $('cDetail').replaceChildren(); await loadCulture();
+      $('cMsg').textContent = out.approval_id ? `Created. The ₹${Number(out.budget).toLocaleString('en-IN')} budget needs approval before you can announce it.` : 'Created. Announce it when you are ready.';
+      eventDetail(out.event_id); } catch (e) { say.textContent = e.message; say.className = 'err'; } };
+  grid.append(go); box.append(head, grid, say); $('cDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
+};
+$('cSurveyNew').onclick = () => {
+  const box = el('div', undefined, 'card'); const head = el('div', undefined, 'card-head'); const hd = el('div');
+  hd.append(el('h3', 'Start a pulse survey'), el('div', 'Answers are anonymous and results appear once three people have answered', 'sub'));
+  const close = el('button', 'Close', 'btn ghost'); close.onclick = () => $('cDetail').replaceChildren(); head.append(hd, close);
+  const grid = el('div', undefined, 'grid2'); grid.style.marginTop = '12px';
+  const title = inp('text', 'October pulse'), q = inp('text', 'How are you feeling about work this month?'), closes = inp('date');
+  const go = el('button', 'Start survey', 'btn primary'); const say = el('div', '', 'muted');
+  go.onclick = async () => { try { await api('/api/culture/surveys', {title:title.value, question:q.value, closes:closes.value});
+      $('cDetail').replaceChildren(); loadCulture(); } catch (e) { say.textContent = e.message; say.className = 'err'; } };
+  grid.append(field('Title', title), field('Question', q), field('Closes', closes), go);
+  box.append(head, grid, say); $('cDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
+};
+async function surveyResults(id) {
+  const r = await api(`/api/culture/surveys/${id}`);
+  const box = el('div', undefined, 'card'); const head = el('div', undefined, 'card-head'); const hd = el('div');
+  hd.append(el('h3', r.title), el('div', r.question, 'sub'));
+  const close = el('button', 'Close', 'btn ghost'); close.onclick = () => $('cDetail').replaceChildren(); head.append(hd, close);
+  box.append(head);
+  if (r.note) box.append(el('div', r.note, 'empty'));
+  else {
+    box.append(el('div', `Average ${r.average} of ${r.scale_max} from ${r.answers} answer(s)`, 'ink2'));
+    const chart = el('div'); chart.id = 'cPulse'; box.append(chart);
+    $('cDetail').replaceChildren(box);
+    columns('cPulse', r.distribution.map(x => ({label:String(x.score), short:String(x.score), value:x.count, tip:`score ${x.score}`})));
+    if (r.comments.length) { box.append(el('div', 'Comments', 'section-title'));
+      r.comments.forEach(c => box.append(el('div', '“' + c + '”', 'ink2'))); }
+    return box.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+  $('cDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+async function eventDetail(id) {
+  let d; try { d = await api(`/api/culture/events/${id}`); } catch (e) { return $('cMsg').textContent = e.message; }
+  const e = d.event, a = d.attendance;
+  const box = el('div', undefined, 'card'); const head = el('div', undefined, 'card-head'); const hd = el('div');
+  hd.append(el('h3', e.title), el('div', `${e.day}${e.start_time ? ' at ' + e.start_time : ''} · ${e.kind.replace('_', ' ')} · ${e.location || 'venue to be decided'} · ${e.status}`, 'sub'));
+  const close = el('button', 'Close', 'btn ghost'); close.onclick = () => $('cDetail').replaceChildren(); head.append(hd, close);
+  box.append(head);
+  if (e.description) box.append(el('p', e.description, 'ink2'));
+  const facts = el('div', undefined, 'row');
+  facts.append(el('span', `${a.yes} yes`, 'pill'), el('span', `${a.maybe} maybe`, 'pill'), el('span', `${a.no} no`, 'pill'),
+               el('span', `${a.headcount} coming (with guests)`, 'pill'), el('span', `${a.responded} of ${a.employees} replied`, 'pill'));
+  if (e.budget) facts.append(el('span', `budget ₹${e.budget.toLocaleString('en-IN')}`, 'pill'));
+  if (e.budget_status === 'pending_approval') facts.append(statusTag('warning', 'Budget waiting for approval'));
+  if (e.budget_status === 'rejected') facts.append(statusTag('critical', 'Budget rejected'));
+  box.append(facts);
+  const say = el('div', '', 'muted');
+  const run = async (path, body) => { try { await api(path, body); await loadCulture(); eventDetail(id); } catch (err) { say.textContent = err.message; say.className = 'err'; } };
+  const row = el('div', undefined, 'row'); row.style.marginTop = '12px';
+  if (me.employee_id)            // someone without an employee record has nothing to answer for
+    ['yes','maybe','no'].forEach(ans => { const b = el('button', ans === 'yes' ? "I'm coming" : ans === 'maybe' ? 'Maybe' : "Can't make it", ans === 'yes' ? 'btn primary' : 'btn');
+      b.onclick = () => run('/api/culture/rsvp', {event:id, answer:ans}); row.append(b); });
+  if (HR(me.role)) {
+    if (e.status === 'planned') { const an = el('button', 'Announce (drafts the invitation)', 'btn');
+      an.onclick = () => run('/api/culture/events/announce', {event:id}); row.append(an); }
+    if (e.status !== 'cancelled') { const cx = el('button', 'Cancel event', 'btn ghost');
+      cx.onclick = () => run('/api/culture/events/update', {event:id, status:'cancelled'}); row.append(cx); }
+    const sp = inp('number', 'Spend so far'); const sb = el('button', 'Record spend', 'btn ghost');
+    sb.onclick = () => run('/api/culture/events/update', {event:id, spent:sp.value});
+    const wrap = el('div', undefined, 'row'); wrap.append(sp, sb); row.append(wrap);
+  }
+  box.append(row, say);
+  if (d.rsvps.length) { box.append(el('div', 'Replies', 'section-title'));
+    const t = el('table'); d.rsvps.forEach(x => { const tr = el('tr');
+      tr.append(el('td', x.name), el('td', x.answer), el('td', x.guests ? `+${x.guests}` : '', 'num'), el('td', x.note || '', 'muted')); t.append(tr); });
+    const w = el('div', undefined, 'table-wrap'); w.append(t); box.append(w); }
+  $('cDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 // ---------------------------------------------------------------- payroll
