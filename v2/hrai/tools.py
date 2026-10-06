@@ -510,7 +510,7 @@ def hr_insights(section: str = "", job_id: str = "") -> dict:
     from . import insights
     fns = {"hiring": lambda: insights.hiring(job_id or None), "workforce": insights.workforce, "leave": insights.leave,
            "onboarding": insights.onboarding, "ai": insights.ai_usage, "operations": insights.operations,
-           "payroll": insights.payroll_numbers}
+           "payroll": insights.payroll_numbers, "projects": insights.projects_numbers}
     if section:
         if section not in fns:
             return {"error": f"Unknown section {section!r}; use one of {', '.join(fns)}"}
@@ -635,3 +635,136 @@ def my_payslip(month: str = "", employee: str = "") -> dict:
 def salary_structures() -> dict:
     """Every employee's current CTC, monthly gross, tax regime, missing details and any pending revision."""
     return {"employees": _pay(lambda p: p.structures)}
+
+
+# ---------------------------------------------------------------- projects and staffing
+
+def _proj(fn, *args, **kwargs):
+    from . import projects
+    try:
+        return fn(projects)(*args, **kwargs)
+    except projects.ProjectError as exc:
+        return {"error": str(exc)}
+
+
+MANAGER_ROLES = {"admin", "hr", "manager", "service"}
+
+
+@hr_tool(MANAGER_ROLES)
+def project_board(status: str = "") -> dict:
+    """Every project with its team size, FTE, open and overdue tasks, hours this month and days left."""
+    return {"projects": _proj(lambda p: p.board, status or None)}
+
+
+@hr_tool(MANAGER_ROLES)
+def project_details(project: str) -> dict:
+    """One project: its team, tasks, staffing gaps and recent history."""
+    from . import projects
+    try:
+        p = projects.get(project)
+        return {"project": p, "team": projects.team(p["id"]), "tasks": projects.tasks(p["id"], open_only=False),
+                "staffing": projects.staffing_gap(p["id"]),
+                "events": db.q("SELECT ts, actor, event, detail FROM project_events WHERE project_id=? ORDER BY id DESC "
+                               "LIMIT 20", (p["id"],))}
+    except projects.ProjectError as exc:
+        return {"error": str(exc)}
+
+
+@hr_tool(MANAGER_ROLES)
+def create_project(project_name: str, client: str = "", manager: str = "", start_date: str = "", end_date: str = "",
+                   skills: list[str] = None, notes: str = "") -> dict:
+    """Start a project. skills are the ones it needs, used for staffing suggestions and gaps."""
+    return _proj(lambda p: p.create, project_name, client, manager, start_date or None, end_date or None, skills or [],
+                 notes=notes)
+
+
+@hr_tool(MANAGER_ROLES)
+def update_project(project: str, status: str = "", health: str = "", manager: str = "", end_date: str = "",
+                   notes: str = "") -> dict:
+    """Change a project's status (planned, active, on_hold, done, cancelled), health, manager, end date or notes."""
+    return _proj(lambda p: p.update, project, status=status, health=health, manager=manager, end_date=end_date,
+                 notes=notes)
+
+
+@hr_tool(MANAGER_ROLES)
+def allocate_person(employee: str, project: str, percent: float = 100, role: str = "", start_date: str = "",
+                    end_date: str = "") -> dict:
+    """Put someone on a project for a share of their time. Refuses to take anyone past 100%."""
+    return _proj(lambda p: p.allocate, employee, project, percent, role, start_date or None, end_date or None)
+
+
+@hr_tool(MANAGER_ROLES)
+def release_person(allocation_id: int, end_date: str = "", note: str = "") -> dict:
+    """End someone's allocation to a project (today by default)."""
+    return _proj(lambda p: p.release, allocation_id, end_date or None, note)
+
+
+@hr_tool(MANAGER_ROLES)
+def team_capacity(weeks: int = 4, free_only: bool = False) -> dict:
+    """Who is booked how much over the next few weeks, who is free, who is over 100%, and approved leave in that time."""
+    from . import projects
+    rows = projects.bench(weeks) if free_only else projects.capacity(weeks)
+    return {"weeks": weeks, "utilisation": projects.utilisation(weeks), "people": rows}
+
+
+@hr_tool(MANAGER_ROLES)
+def project_risks() -> dict:
+    """What needs a manager's attention across projects: overdue tasks, unstaffed projects, over-allocation,
+    skill gaps and people rolling off soon."""
+    return {"risks": _proj(lambda p: p.risks)}
+
+
+@hr_tool(MANAGER_ROLES)
+def add_project_task(project: str, title: str, owner: str = "", due: str = "", kind: str = "task",
+                     estimate_hours: float = 0) -> dict:
+    """Add a task or milestone to a project (kind: task or milestone)."""
+    return _proj(lambda p: p.add_task, project, title, owner, due or None, "todo", kind, estimate_hours)
+
+
+@hr_tool(MANAGER_ROLES)
+def update_project_task(task_id: int, status: str = "", owner: str = "", due: str = "", note: str = "") -> dict:
+    """Change a task: status (todo, in_progress, blocked, done), owner, due date or note."""
+    return _proj(lambda p: p.set_task, task_id, status or None, owner or None, due or None, note)
+
+
+@hr_tool(MANAGER_ROLES)
+def project_tasks(project: str = "", owner: str = "", include_done: bool = False) -> dict:
+    """Open tasks across projects, or for one project or owner, with overdue ones flagged."""
+    return {"tasks": _proj(lambda p: p.tasks, project or None, owner or None, not include_done)}
+
+
+@hr_tool(ALL_ROLES)
+def my_projects(employee: str = "") -> dict:
+    """Which projects someone is on and how much of their time. Employees only ever see their own."""
+    from . import projects
+    user = auth.current_user()
+    target = employee or user.employee_id
+    if user.role not in MANAGER_ROLES:
+        if not user.employee_id:
+            return {"error": "Your login is not linked to an employee record"}
+        if employee and employee != user.employee_id:
+            return {"error": "You can only see your own projects"}
+        target = user.employee_id
+    if not target:
+        return {"error": "Which employee?"}
+    return _proj(lambda p: p.assignments, target)
+
+
+@hr_tool(ALL_ROLES)
+def log_project_hours(project: str, day: str, hours: float, employee: str = "", note: str = "") -> dict:
+    """Log hours on a project for a day. Employees can only log their own."""
+    user = auth.current_user()
+    target = employee or user.employee_id
+    if user.role not in MANAGER_ROLES:
+        if employee and employee != user.employee_id:
+            return {"error": "You can only log your own hours"}
+        target = user.employee_id
+    if not target:
+        return {"error": "Which employee? Your login is not linked to an employee record"}
+    return _proj(lambda p: p.log_hours, target, project, day, hours, note)
+
+
+@hr_tool(MANAGER_ROLES)
+def project_timesheet(project: str = "", employee: str = "", days: int = 7) -> dict:
+    """Hours logged over the last few days, by project and by person."""
+    return _proj(lambda p: p.timesheet, employee or None, project or None, days)

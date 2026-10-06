@@ -199,3 +199,23 @@ def payroll_reminder():
     finally:
         auth._current.reset(reset)
     return {"month": month, "status": s["status"]}
+
+
+@triggers.schedule("project_health", daily="08:45")
+def project_health():
+    """Every morning: flag project risks, and on Mondays draft a staffing digest for managers."""
+    from . import projects
+    risks = projects.risks()
+    drafted = False
+    if risks and (config.today().weekday() == 0 or any(r["severity"] == "critical" for r in risks)):
+        reset = _as(auth.User(0, "trigger", "service"))
+        try:
+            u = projects.utilisation()
+            T.run("draft_email", to=config.env("HRAI_HR_EMAIL", "hr@example.com"), subject="Projects and staffing",
+                  body="\n".join(f"- {r['text']}" for r in risks) +
+                       f"\n\nAverage utilisation {u['average_pct']}% across {u['people']} people; {u['bench']} on the "
+                       f"bench, {u['over_allocated']} over-allocated.")
+            drafted = True
+        finally:
+            auth._current.reset(reset)
+    return {"risks": len(risks), "email_drafted": drafted}

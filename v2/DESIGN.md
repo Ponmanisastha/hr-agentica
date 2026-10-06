@@ -194,7 +194,25 @@ and tickets and feedback.
 - **Agent.** The payroll agent answers breakup, regime-comparison, run, submit, revision and payslip requests, and the
   router sends salary wording to it. The dashboard and the needs-attention list pick up payroll state too.
 
-## 12. Phases
+## 12. Projects and staffing (HR suite, phase 4)
+
+`hrai/projects.py`, the **projects agent**, 14 tools, the Projects page and a daily `project_health` trigger.
+
+- **Allocation** is a percent of someone's time between two dates. Overlapping allocations are added up, and
+  `allocate` refuses anything that would pass 100%, saying how much is actually free. Releasing sets an end date and
+  keeps the history, so capacity stays truthful.
+- **Capacity** looks four weeks ahead and subtracts approved leave. The bench is anyone at or under 50%.
+  Utilisation is the average across everyone.
+- **Tasks and milestones** carry a status, owner and due date; overdue is past due and not done. Timesheets record
+  hours per person per project per day (16 hours a day maximum, nothing in the future).
+- **Risks** is the staffing version of needs-attention: overdue tasks, an active project with nobody on it, a project
+  ending with work open, someone over 100%, a skill nobody on the project has (with free people who do), and people
+  rolling off in the next two weeks. These also appear on the HR dashboard.
+- **Skills** now live on employees (`employees.skills`) and on projects, which is what drives staffing suggestions
+  and gaps; a gap with nobody free to fill it is a hiring signal, next to the hiring funnel on the same dashboard.
+- Employees see and log only their own; staffing changes need `projects:manage` (admin, HR, manager).
+
+## 13. Phases
 
 | Phase | Content | Status |
 | --- | --- | --- |
@@ -206,13 +224,14 @@ and tickets and feedback.
 | 6 | Hiring pipeline: resume inbox, screening, L1..Ln/HR/Final rounds, offers, joining, follow-ups | Done (HR suite phase 1) |
 | 7 | Insights and analytics dashboard; UI redesign | Done (HR suite phase 2) |
 | 8 | Salary management: CTC breakup, PF, ESI, professional tax, TDS, payslips, payroll approvals | Done (HR suite phase 3) |
-| 9 | Project management; cultural events and HR activities | Next |
-| 10 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Later |
-| 11 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
+| 9 | Project management: projects, allocations, capacity and the bench, tasks, timesheets | Done (HR suite phase 4) |
+| 10 | Cultural events and HR activities | Next |
+| 11 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Later |
+| 12 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
 
-## 13. What was tested, and what was not
+## 14. What was tested, and what was not
 
-**Tested (57 automated tests on Python 3.14.6, offline):**
+**Tested (68 automated tests on Python 3.14.6, offline):**
 - Login, hashing, lockout and roles
 - All four agents in rules-only mode
 - The LLM tool loop with a scripted model response
@@ -231,6 +250,8 @@ and tickets and feedback.
 - Payroll: CTC breakup (metro and not, with and without ESI), professional tax by state, 87A rebate, surcharge,
   no-PAN TDS, HRA exemption, LOP and one-off items, run to submit to approve to paid (including the submitter being
   refused), TDS spread across months, revisions behind approval, payslip privacy and the web API
+- Projects: the 100% allocation rule, releasing, capacity with approved leave, the bench, staffing gaps and
+  suggestions, task status and overdue, timesheet limits, risks, the agent in rules mode, role checks and the API
 - The full ticket workflow (gap → patch → worktree tests → review → approve → merge → closed, plus the reject and needs-human paths) in a repo where the app sits in a subfolder
 
 **Also checked by hand:** the MCP server over stdio with a real MCP client, the CrewAI wiring on Python 3.13 (crew assembly and tools, with the model call mocked), and MiniLM semantic search.

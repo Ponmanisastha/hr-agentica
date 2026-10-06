@@ -43,6 +43,9 @@ def recall_node(state: State):
 
 def keyword_route(text):
     t = text.lower()
+    if re.search(r"project|allocat|staff(ing|ed)?\b|bench|capacity|utilisation|utilization|timesheet|milestone|"
+                 r"who is free|roll(ing)? off|\bfte\b|what is slipping|slipping|\btasks?\b|\bput\b .* \bon\b", t):
+        return "projects"
     if re.search(r"payslip|pay ?slip|payroll|salary|\bctc\b|\bpf\b|\besi\b|professional tax|\btds\b|take[- ]home|"
                  r"tax regime|hike|increment|appraisal|bonus|in-?hand|gratuity", t):
         return "payroll"

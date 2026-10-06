@@ -71,6 +71,20 @@ CREATE TABLE IF NOT EXISTS candidate_events (
 CREATE TABLE IF NOT EXISTS offers (
     id INTEGER PRIMARY KEY, candidate_id TEXT, job_id TEXT, ctc_lpa REAL, joining_date TEXT, status TEXT,
     approval_id INTEGER, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY, name TEXT, client TEXT, manager TEXT, start_date TEXT, end_date TEXT,
+    status TEXT DEFAULT 'active', health TEXT DEFAULT 'on_track', skills TEXT, notes TEXT, created_by TEXT,
+    created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS allocations (
+    id INTEGER PRIMARY KEY, employee_id TEXT, project_id TEXT, percent REAL, role TEXT, start_date TEXT,
+    end_date TEXT, status TEXT DEFAULT 'active', created_by TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS project_tasks (
+    id INTEGER PRIMARY KEY, project_id TEXT, title TEXT, owner_id TEXT, due TEXT, status TEXT DEFAULT 'todo',
+    kind TEXT DEFAULT 'task', estimate_hours REAL, note TEXT, created_by TEXT, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS timesheets (
+    id INTEGER PRIMARY KEY, employee_id TEXT, project_id TEXT, day TEXT, hours REAL, note TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS project_events (
+    id INTEGER PRIMARY KEY, project_id TEXT, ts TEXT, actor TEXT, event TEXT, detail TEXT);
 CREATE TABLE IF NOT EXISTS salary_structures (
     id INTEGER PRIMARY KEY, employee_id TEXT, ctc_annual REAL, effective_from TEXT, metro INTEGER DEFAULT 0,
     regime TEXT DEFAULT 'new', pt_state TEXT, pan TEXT, uan TEXT, bank_account TEXT, ifsc TEXT, declarations TEXT,
@@ -97,6 +111,7 @@ MIGRATIONS = {
                    "stage": "TEXT DEFAULT 'applied'", "status_note": "TEXT", "created_at": "TEXT"},
     "jobs": {"rounds": "TEXT", "select_threshold": "INTEGER DEFAULT 70", "status": "TEXT DEFAULT 'open'"},
     "new_hires": {"candidate_id": "TEXT", "employee_id": "TEXT"},
+    "employees": {"skills": "TEXT"},
 }
 
 
@@ -161,9 +176,10 @@ def seed_sample_data():
     D = config.DATA
     for e in json.loads((D / "employees.json").read_text(encoding="utf-8")):
         b = e["leave_balance"]
-        x("INSERT OR REPLACE INTO employees VALUES (?,?,?,?,?,?,?,?,?,?)",
+        x("INSERT OR REPLACE INTO employees (id, name, email, department, level, manager, manager_email, annual, sick, "
+          "casual, skills) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
           (e["id"], e["name"], e["email"], e.get("department"), e.get("level"), e["manager"],
-           e["manager_email"], b["annual"], b["sick"], b["casual"]))
+           e["manager_email"], b["annual"], b["sick"], b["casual"], json.dumps(e.get("skills", []))))
     for j in json.loads((D / "job_openings.json").read_text(encoding="utf-8")):
         x("INSERT OR REPLACE INTO jobs (id, title, location, min_years, must_have, nice_to_have, shortlist_size) "
           "VALUES (?,?,?,?,?,?,?)",
@@ -186,5 +202,6 @@ def seed_sample_data():
           "created_at) VALUES (?,?,?,?,?,?,?,?,?)",
           (f"C-{i:03d}", path.name, name.group(1).strip() if name else path.stem,
            email.group(1).strip() if email else None, text, job["id"] if job else None, now(), "applied", now()))
-    from . import payroll
+    from . import payroll, projects
     payroll.seed_sample_salaries()
+    projects.seed_sample_projects()

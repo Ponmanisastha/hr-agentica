@@ -224,6 +224,19 @@ def payroll_numbers():
             "statutory": s.get("statutory", {}), "warnings": s.get("warnings", []), "history": payroll.history()}
 
 
+def projects_numbers():
+    from . import projects
+    b = projects.board()
+    return {"projects": len(b), "active": sum(p["status"] == "active" for p in b),
+            "utilisation": projects.utilisation(),
+            "open_tasks": sum(p["open_tasks"] for p in b), "overdue_tasks": sum(p["overdue_tasks"] for p in b),
+            "hours_this_month": round(sum(p["hours_this_month"] for p in b), 1),
+            "by_project": [{"project": p["name"], "status": p["status"], "team_size": p["team_size"], "fte": p["fte"],
+                            "open_tasks": p["open_tasks"], "overdue_tasks": p["overdue_tasks"],
+                            "hours_this_month": p["hours_this_month"]} for p in b],
+            "risks": projects.risks()}
+
+
 def operations():
     tickets = db.q("SELECT status, kind FROM tickets")
     fb = db.q("SELECT rating FROM feedback")
@@ -279,6 +292,14 @@ def attention(limit=12):
             add(3, f"Payroll detail missing: {w}", "payroll", m)
     except Exception:  # payroll is optional for the attention list
         pass
+    try:
+        from . import projects
+        for risk in projects.risks():
+            if risk["severity"] in ("critical", "warning"):
+                add(2 if risk["severity"] == "critical" else 3, risk["text"], "projects",
+                    risk.get("project_id") or risk.get("employee_id"), risk["severity"])
+    except Exception:  # projects are optional for the attention list
+        pass
     tk = db.q("SELECT id, title FROM tickets WHERE status='awaiting_approval'")
     for k in tk:
         add(3, f"Fix ready for review: ticket #{k['id']} {k['title']}", "tickets", k["id"])
@@ -298,7 +319,7 @@ def attention(limit=12):
 
 def overview(job_id=None):
     h, w, lv, ob, ai, ops = hiring(job_id), workforce(), leave(), onboarding(), ai_usage(), operations()
-    pay = payroll_numbers()
+    pay, prj = payroll_numbers(), projects_numbers()
     soon = (config.today() + timedelta(days=30)).isoformat()
     week = (config.today() + timedelta(days=7)).isoformat()
     t = config.today().isoformat()
@@ -315,9 +336,11 @@ def overview(job_id=None):
         "ai_spend_usd": ai["total"]["spent_usd"], "ai_budget_usd": ai["total"]["budget_usd"],
         "open_tickets": ops["open_tickets"],
         "payroll_net": pay["net"], "payroll_status": pay["status"], "payroll_month": pay["month"],
+        "active_projects": prj["active"], "utilisation_pct": prj["utilisation"]["average_pct"],
+        "bench": prj["utilisation"]["bench"], "overdue_tasks": prj["overdue_tasks"],
     }
     return {"as_of": t, "kpis": kpis, "attention": attention(), "hiring": h, "workforce": w, "leave": lv,
-            "onboarding": ob, "ai": ai, "operations": ops, "payroll": pay}
+            "onboarding": ob, "ai": ai, "operations": ops, "payroll": pay, "projects": prj}
 
 
 def narrate(data=None):
@@ -352,6 +375,11 @@ def narrate(data=None):
         p = d["payroll"]
         lines.append(f"- Payroll {p['month']} ({p['status'].replace('_', ' ')}): net Rs {p['net']:,} for {p['employees']} "
                      f"employees, employer cost Rs {p['employer_cost']:,}.")
+    if d["projects"]["projects"]:
+        pj = d["projects"]
+        lines.append(f"- Projects: {pj['active']} active, average utilisation {pj['utilisation']['average_pct']}%, "
+                     f"{pj['utilisation']['bench']} on the bench, {pj['open_tasks']} open task(s) "
+                     f"({pj['overdue_tasks']} overdue).")
     lines.append(f"- AI spend this month: ${k['ai_spend_usd']:.2f} of ${k['ai_budget_usd']:.2f}. Open tickets: {k['open_tickets']}.")
     if d["attention"]:
         lines.append("Needs attention:")
