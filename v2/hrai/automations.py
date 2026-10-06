@@ -2,7 +2,7 @@
 
 import json
 import threading
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from . import auth, config, db, triggers
 from . import tools as T
@@ -101,7 +101,57 @@ def auto_work_ticket(payload):
 
 def add_new_hire(hire):
     """Example producer: inserting a new hire fires the new_hire.created event."""
-    db.x("INSERT OR REPLACE INTO new_hires VALUES (?,?,?,?,?,?,?,?)",
+    db.x("INSERT OR REPLACE INTO new_hires (id, name, email, role, department, manager, start_date, documents) "
+         "VALUES (?,?,?,?,?,?,?,?)",
          (hire["id"], hire["name"], hire["email"], hire["role"], hire["department"], hire["manager"], hire["start_date"],
           json.dumps(hire.get("documents_submitted", []))))
     triggers.emit("new_hire.created", {"hire_id": hire["id"]})
+
+
+# ---------------------------------------------------------------- hiring pipeline
+
+@triggers.schedule("inbox_watch", every=120)
+def inbox_watch():
+    """Every 2 minutes: read new resume files dropped into inbox/<JOB-ID>/ and screen them."""
+    from . import hiring
+    reset = _as(auth.User(0, "trigger", "service"))
+    try:
+        r = hiring.ingest()
+        return {k: v for k, v in r.items() if v}
+    finally:
+        auth._current.reset(reset)
+
+
+@triggers.schedule("hiring_followups", daily="08:30")
+def hiring_followups():
+    """Every morning: a digest email to HR of follow-ups due today or overdue, and reminders for tomorrow's interviews."""
+    from . import hiring
+    reset = _as(auth.User(0, "trigger", "service"))
+    try:
+        due = hiring.followups(0)
+        tomorrow = (config.today() + timedelta(days=1)).isoformat()
+        interviews = db.q("SELECT i.*, c.name, c.email FROM interviews i JOIN candidates c ON c.id=i.candidate_id "
+                          "WHERE i.status='scheduled' AND substr(i.scheduled_at,1,10)=?", (tomorrow,))
+        for iv in interviews:
+            T.run("draft_email", to=iv["email"], subject=f"Reminder: your {iv['round']} interview tomorrow",
+                  body=f"Dear {iv['name']},\n\nA reminder that your {iv['round']} interview is at "
+                       f"{iv['scheduled_at'][11:16]} tomorrow ({iv['mode']}).\n\nRegards,\nTalent Acquisition")
+        if due:
+            T.run("draft_email", to=config.env("HRAI_HR_EMAIL", "hr@example.com"), subject=f"{len(due)} hiring follow-ups due",
+                  body="\n".join(f"- {f['due']} {f['name']} ({f['stage']}): {f['note']}" for f in due))
+        return {"followups_due": len(due), "interview_reminders": len(interviews)}
+    finally:
+        auth._current.reset(reset)
+
+
+@triggers.schedule("stale_candidates", daily="10:00")
+def stale_candidates():
+    """Every morning: candidates stuck in selected, on_hold or interviewing for 5+ days get a follow-up."""
+    from . import hiring
+    cutoff = (datetime.now() - timedelta(days=5)).isoformat(timespec="seconds")
+    flagged = []
+    for c in db.q("SELECT id, name, stage FROM candidates WHERE stage IN ('selected','on_hold','interviewing') AND updated_at<?", (cutoff,)):
+        if not db.q1("SELECT 1 AS y FROM followups WHERE candidate_id=? AND kind='stale' AND status='open'", (c["id"],)):
+            hiring.add_followup(c["id"], config.today().isoformat(), "stale", f"{c['name']} has been {c['stage']} for 5+ days; decide the next step")
+            flagged.append(c["id"])
+    return {"flagged": flagged}

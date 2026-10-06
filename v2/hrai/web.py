@@ -17,6 +17,8 @@ from .ops import ticket_agent, tracker
 
 PAGE = config.ROOT / "web" / "index.html"
 MAX_BODY = 1_000_000
+MAX_UPLOAD_BODY = 30_000_000  # resume uploads (base64 JSON)
+MAX_FILE = 5_000_000
 COOKIE = "hrai_session"
 
 
@@ -55,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length", 0))
-        if n > MAX_BODY:
+        if n > (MAX_UPLOAD_BODY if self.path.startswith("/api/hiring/upload") else MAX_BODY):
             raise ValueError("Request body too large")
         if n and "application/json" not in self.headers.get("Content-Type", ""):
             raise ValueError("POST bodies must be application/json")
@@ -90,6 +92,8 @@ class Handler(BaseHTTPRequestHandler):
             auth._current.reset(reset)
 
     def _get_api(self, path, user):
+        if path.startswith("/api/hiring/"):
+            return self._get_hiring(path)
         if path == "/api/me":
             return self._send(200, {"username": user.username, "role": user.role, "employee_id": user.employee_id})
         if path == "/api/approvals":
@@ -116,6 +120,71 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"schedules": [{"name": n, "every_s": s["every"], "daily": s["daily"], "what": s["doc"]}
                                                   for n, s in triggers.SCHEDULES.items()],
                                     "recent_runs": db.q("SELECT * FROM trigger_runs ORDER BY id DESC LIMIT 20")})
+        return self._send(404, {"error": "not found"})
+
+    def _ok_or_error(self, out):
+        return self._send(400 if isinstance(out, dict) and "error" in out else 200, out)
+
+    def _get_hiring(self, path):
+        from urllib.parse import parse_qs, urlparse
+        qs = parse_qs(urlparse(self.path).query)
+        if path == "/api/hiring/board":
+            out = T.run("pipeline_summary", job_id=qs.get("job", [""])[0])
+            return self._ok_or_error(out)
+        if path == "/api/hiring/followups":
+            return self._ok_or_error(T.run("list_followups", days_ahead=int(qs.get("days", ["14"])[0])))
+        m = re.fullmatch(r"/api/hiring/candidates/([\w-]+)", path)
+        if m:
+            return self._ok_or_error(T.run("candidate_timeline", candidate=m.group(1)))
+        return self._send(404, {"error": "not found"})
+
+    def _post_hiring(self, path, body):
+        import base64
+        from . import hiring
+        if path == "/api/hiring/upload":
+            auth.require("agent:recruitment")
+            job = db.q1("SELECT id FROM jobs WHERE id=?", (body.get("job_id", ""),))
+            if not job:
+                raise ValueError("Pick a job for these resumes")
+            folder = hiring.inbox_root() / job["id"]
+            folder.mkdir(parents=True, exist_ok=True)
+            saved = []
+            for f in body.get("files", [])[:50]:
+                name = re.sub(r"[^\w.\- ]", "_", f.get("name", ""))[:120].strip()
+                if not name or "." not in name or name.rsplit(".", 1)[1].lower() not in ("txt", "md", "pdf", "docx"):
+                    raise ValueError(f"Unsupported file {f.get('name')!r}: use .pdf, .docx, .txt or .md")
+                data = base64.b64decode(f.get("content_b64", ""), validate=True)
+                if len(data) > MAX_FILE:
+                    raise ValueError(f"{name} is larger than 5 MB")
+                (folder / name).write_bytes(data)
+                saved.append(name)
+            return self._ok_or_error({"saved": saved, **T.run("ingest_resumes", job_id=job["id"])})
+        m = re.fullmatch(r"/api/hiring/candidates/([\w-]+)/(\w+)", path)
+        if m:
+            cid, action = m.groups()
+            calls = {
+                "move": lambda: T.run("move_candidate", candidate=cid, stage=body.get("stage", ""), note=body.get("note", "")),
+                "schedule": lambda: T.run("schedule_interview", candidate=cid, round_name=body.get("round", ""),
+                                          when=body.get("when", ""), interviewer=body.get("interviewer", ""),
+                                          mode=body.get("mode", "Video call")),
+                "result": lambda: T.run("record_interview_result", candidate=cid, round_name=body.get("round", ""),
+                                        result=body.get("result", ""), rating=int(body.get("rating") or 0),
+                                        feedback=body.get("feedback", "")),
+                "offer": lambda: T.run("make_offer", candidate=cid, ctc_lpa=float(body.get("ctc_lpa") or 0),
+                                       joining_date=body.get("joining_date", "")),
+                "offer_response": lambda: T.run("record_offer_response", candidate=cid, accepted=bool(body.get("accepted")),
+                                                joining_date=body.get("joining_date", "")),
+                "joined": lambda: T.run("mark_joined", candidate=cid),
+            }
+            if action not in calls:
+                return self._send(404, {"error": "unknown action"})
+            return self._ok_or_error(calls[action]())
+        m = re.fullmatch(r"/api/hiring/followups/(\d+)/done", path)
+        if m:
+            return self._ok_or_error(T.run("complete_followup", followup_id=int(m.group(1)), note=body.get("note", "")))
+        m = re.fullmatch(r"/api/hiring/jobs/([\w-]+)/rounds", path)
+        if m:
+            return self._ok_or_error(T.run("set_interview_rounds", job_id=m.group(1), rounds=body.get("rounds", [])))
         return self._send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -153,6 +222,8 @@ class Handler(BaseHTTPRequestHandler):
             auth._current.reset(reset)
 
     def _post_api(self, path, body, user):
+        if path.startswith("/api/hiring/"):
+            return self._post_hiring(path, body)
         if path == "/api/logout":
             auth.logout(self._token())
             return self._send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Max-Age=0; Path=/"})

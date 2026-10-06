@@ -41,6 +41,29 @@ python app.py budget set screening 20 --on-exceed block
 
 Web console tabs depend on your role: Ask (with 👍 and 👎 feedback), Approvals, Tickets (approve or reject fixes), Budget, and Outbox (email drafts).
 
+## Hiring pipeline
+
+Drop resumes (.pdf, .docx, .txt, .md) into `inbox/<JOB-ID>/` (for example `inbox/JOB-101/`), or drag them onto the
+Hiring tab in the web console. They are read, screened and sorted into **selected**, **on hold** or **rejected**, and a
+copy lands in `inbox/<JOB-ID>/sorted/<stage>/` so the folder shows the result too. With `python app.py triggers run`
+going, new files are picked up every 2 minutes.
+
+Each job has its own interview rounds (default L1, L2, HR, Final). Change them in the Hiring tab or with
+`python app.py hiring rounds JOB-101 L1 L2 L3 HR Final`. From the Hiring board you schedule rounds, record pass, fail or
+hold with a 1-5 rating and feedback, request an offer (it waits in Approvals), record the candidate's answer, and mark
+them joined. Accepting an offer creates the new hire, starts onboarding, and sets follow-ups: a pre-joining call,
+a documents check, day one, a 30-day check-in and a 90-day probation review. Every step is on the candidate's timeline.
+
+```bash
+python app.py hiring sample          # copy three sample resumes into inbox/JOB-101/
+python app.py hiring ingest          # read and screen them now
+python app.py hiring                 # pipeline counts per stage and round
+python app.py hiring followups
+python app.py ask "Divya cleared L1 with rating 4, schedule the next round on 2026-10-12 at 15:00"
+```
+
+The `inbox/` folder is git-ignored because resumes are personal data.
+
 ## Tickets and auto-fixes
 
 ```bash
@@ -66,7 +89,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 28 tests, offline, about 15 seconds
+python -m unittest discover -s tests -t .     # 36 tests, offline, about 15 seconds
 ```
 
 ## Layout
@@ -78,6 +101,7 @@ python -m unittest discover -s tests -t .     # 28 tests, offline, about 15 seco
 | `hrai/gateway/` | AI gateway (LiteLLM, budgets), agent gateway, optional LiteLLM proxy config |
 | `hrai/knowledge/` | Chroma vectors (RAG), knowledge graph (KAG), CAG, memory (MAG) |
 | `hrai/tools.py` | The HR tools (LangChain), with role checks |
+| `hrai/hiring.py` | Hiring pipeline: inbox, screening, rounds, offers, joining, follow-ups |
 | `hrai/auth.py`, `hrai/db.py` | Logins and roles; SQLite schema |
 | `hrai/hooks.py`, `hooks.d/` | Hooks |
 | `hrai/triggers.py`, `hrai/automations.py` | Triggers |

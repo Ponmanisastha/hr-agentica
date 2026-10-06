@@ -150,7 +150,11 @@ def save_shortlist(job_id: str, decisions: list[dict], notes: str = "") -> dict:
         c = db.q1("SELECT * FROM candidates WHERE id=?", (d["candidate_id"],))
         if not c:
             return {"error": f"No candidate {d['candidate_id']}"}
-        db.x("UPDATE candidates SET decision=?, updated_at=? WHERE id=?", (d["decision"], db.now(), c["id"]))
+        stage = "selected" if d["decision"] == "shortlist" else "rejected"
+        db.x("UPDATE candidates SET decision=?, stage=?, status_note=?, updated_at=? WHERE id=?",
+             (d["decision"], stage, d.get("reason", ""), db.now(), c["id"]))
+        db.x("INSERT INTO candidate_events (candidate_id, ts, actor, event, detail) VALUES (?,?,?,?,?)",
+             (c["id"], db.now(), auth.current_user().username, f"screened_{stage}", d.get("reason", "")))
         lines.append(f"| {c['name']} | {c['score']} | {d['decision']} | {d.get('reason', '')} |")
     if notes:
         lines += ["", "## Notes", "", notes]
@@ -387,6 +391,9 @@ def decide_approval(approval_id, approve, note=""):
         raise ValueError("No pending approval with that id")
     status = "approved" if approve else "rejected"
     db.x("UPDATE approvals SET status=?, decided_by=?, decided_at=? WHERE id=?", (status, user.username, db.now(), approval_id))
+    if a["kind"] == "offer":
+        from . import hiring
+        hiring.on_offer_decision(int(a["ref"]), approve)
     if a["kind"] == "leave":
         lr = db.q1("SELECT * FROM leave_requests WHERE id=?", (int(a["ref"]),))
         db.x("UPDATE leave_requests SET status=? WHERE id=?", (status, lr["id"]))
@@ -394,3 +401,92 @@ def decide_approval(approval_id, approve, note=""):
             db.x(f"UPDATE employees SET {lr['leave_type']} = {lr['leave_type']} - ? WHERE id=?", (lr["working_days"], lr["employee_id"]))
     db.audit(user.username, f"approval.{status}", {"id": approval_id, "note": note})
     return {"approval_id": approval_id, "status": status}
+
+
+# ---------------------------------------------------------------- hiring pipeline
+
+def _hiring(fn, *args, **kwargs):
+    from . import hiring
+    try:
+        return fn(hiring)(*args, **kwargs)
+    except hiring.HiringError as exc:
+        return {"error": str(exc)}
+
+
+@hr_tool(HR_ROLES)
+def ingest_resumes(job_id: str = "") -> dict:
+    """Read new resume files from the inbox folder (inbox/<JOB-ID>/), screen them and sort them into selected,
+    on_hold or rejected. Returns what was added, duplicates and unreadable files."""
+    return _hiring(lambda h: h.ingest, job_id=job_id or None)
+
+
+@hr_tool(HR_ROLES)
+def pipeline_summary(job_id: str = "") -> dict:
+    """Counts of candidates per stage and per interview round, plus follow-ups due today."""
+    from . import hiring
+    return {"summary": hiring.summary(job_id or None), "board": hiring.board(job_id or None)}
+
+
+@hr_tool(HR_ROLES)
+def candidate_timeline(candidate: str) -> dict:
+    """Everything about one candidate (id like C-007 or a name): stage, rounds, interviews, offer, follow-ups, history."""
+    return _hiring(lambda h: h.timeline, candidate)
+
+
+@hr_tool(HR_ROLES)
+def move_candidate(candidate: str, stage: str, note: str = "") -> dict:
+    """Move a candidate to a stage (selected, on_hold, rejected, withdrawn, ...) with a note. HR override."""
+    return _hiring(lambda h: h.move, candidate, stage, note)
+
+
+@hr_tool(HR_ROLES)
+def schedule_interview(candidate: str, round_name: str = "", when: str = "", interviewer: str = "",
+                       mode: str = "Video call") -> dict:
+    """Schedule an interview round (L1, L2, HR, Final...; default the next round) at `when` (YYYY-MM-DDTHH:MM).
+    Drafts the invite email and a reminder follow-up."""
+    return _hiring(lambda h: h.schedule, candidate, round_name or None, when or None, interviewer, mode)
+
+
+@hr_tool(HR_ROLES)
+def record_interview_result(candidate: str, round_name: str, result: str, rating: int = 0, feedback: str = "") -> dict:
+    """Record a round's result: pass (moves to the next round, or to offer after the last), fail (rejected, regret
+    email drafted) or hold. rating 1-5, 0 for none."""
+    return _hiring(lambda h: h.record_result, candidate, round_name, result, rating or None, feedback)
+
+
+@hr_tool(HR_ROLES)
+def make_offer(candidate: str, ctc_lpa: float, joining_date: str) -> dict:
+    """Request an offer (CTC in lakh per annum, joining date YYYY-MM-DD). Goes to the approvals queue first."""
+    return _hiring(lambda h: h.make_offer, candidate, ctc_lpa, joining_date)
+
+
+@hr_tool(HR_ROLES)
+def record_offer_response(candidate: str, accepted: bool, joining_date: str = "") -> dict:
+    """Record whether the candidate accepted the offer. Accepting creates the new hire, starts onboarding and
+    schedules pre-joining and post-joining follow-ups."""
+    return _hiring(lambda h: h.offer_response, candidate, accepted, joining_date or None)
+
+
+@hr_tool(HR_ROLES)
+def mark_joined(candidate: str) -> dict:
+    """Mark that an accepted candidate has joined."""
+    return _hiring(lambda h: h.mark_joined, candidate)
+
+
+@hr_tool(HR_ROLES)
+def list_followups(days_ahead: int = 7) -> dict:
+    """Open hiring follow-ups due within `days_ahead` days (overdue ones included)."""
+    from . import hiring
+    return {"followups": hiring.followups(days_ahead)}
+
+
+@hr_tool(HR_ROLES)
+def complete_followup(followup_id: int, note: str = "") -> dict:
+    """Mark a follow-up done."""
+    return _hiring(lambda h: h.complete_followup, followup_id, note)
+
+
+@hr_tool(HR_ROLES)
+def set_interview_rounds(job_id: str, rounds: list[str]) -> dict:
+    """Set a job's interview rounds in order, e.g. ["L1", "L2", "L3", "HR", "Final"]."""
+    return {"job_id": job_id, "rounds": _hiring(lambda h: h.set_rounds, job_id, rounds)}

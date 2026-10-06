@@ -26,6 +26,17 @@
   .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; min-width:80px; }
   .bar span { display:block; height:100%; background:var(--accent); }
   .hidden { display:none; }
+  main.wide { max-width:1400px; }
+  .board { display:flex; gap:10px; overflow-x:auto; padding-bottom:8px; }
+  .col { min-width:190px; flex:1; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; }
+  .col h4 { margin:2px 4px 8px; font-size:13px; display:flex; justify-content:space-between; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+  .cand { border:1px solid var(--line); border-radius:10px; padding:8px; margin-bottom:6px; cursor:pointer; background:var(--bg); }
+  .cand:hover { border-color:var(--accent); }
+  .cand b { display:block; font-size:14px; }
+  .drop { border:2px dashed var(--line); border-radius:12px; padding:14px; text-align:center; color:var(--muted); }
+  .drop.over { border-color:var(--accent); color:var(--accent); }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; }
+  .ok { color:var(--ok); }
   .err { color:var(--bad); }
 </style>
 </head>
@@ -50,6 +61,18 @@
     </div>
     <div id="answers"></div>
   </section>
+  <section id="hiring" class="hidden">
+    <div class="card">
+      <div class="row"><strong>Job</strong> <select id="hJob" style="width:auto"></select>
+        <span class="muted" id="hRounds"></span><button id="hRoundsEdit" class="btn">Edit rounds</button>
+        <button id="hRefresh" class="btn">Refresh</button></div>
+      <div id="hDrop" class="drop" style="margin-top:10px">Drop resumes here (.pdf, .docx, .txt) or <label style="color:var(--accent);cursor:pointer">choose files<input id="hFiles" type="file" multiple accept=".pdf,.docx,.txt,.md" class="hidden"></label>. Files placed in the inbox folder are picked up automatically too.</div>
+      <div id="hMsg" class="muted" style="margin-top:6px"></div>
+    </div>
+    <div id="hBoard" class="board"></div>
+    <div id="hFollow" class="card" style="margin-top:12px"></div>
+    <div id="hDetail"></div>
+  </section>
   <section id="approvals" class="hidden"><div class="card"><h3 style="margin-top:0">Waiting for your approval</h3><div id="apList"></div></div></section>
   <section id="tickets" class="hidden"><div class="card"><h3 style="margin-top:0">Tickets</h3><div id="tkList"></div></div><div id="tkDetail"></div></section>
   <section id="budget" class="hidden"><div class="card"><h3 style="margin-top:0">AI budget this month</h3><div id="bdList"></div></div></section>
@@ -65,12 +88,13 @@ async function api(path, body) {
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;
 }
-const TABS = [['ask','Ask',()=>true],['approvals','Approvals',r=>['admin','hr','manager'].includes(r)],['tickets','Tickets',r=>['admin','hr'].includes(r)],
+const TABS = [['ask','Ask',()=>true],['hiring','Hiring',r=>['admin','hr'].includes(r)],['approvals','Approvals',r=>['admin','hr','manager'].includes(r)],['tickets','Tickets',r=>['admin','hr'].includes(r)],
               ['budget','Budget',r=>['admin','hr'].includes(r)],['outbox','Outbox',r=>['admin','hr'].includes(r)]];
 function show(tab) {
   TABS.forEach(([id]) => $(id).classList.toggle('hidden', id !== tab));
   [...$('nav').children].forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  ({approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
+  document.querySelector('main').classList.toggle('wide', tab === 'hiring');
+  ({hiring:loadHiring, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
 }
 function start(user) {
   me = user; $('login').classList.add('hidden'); $('logout').classList.remove('hidden');
@@ -146,6 +170,86 @@ async function loadOutbox() {
   const list = await api('/api/outbox'); const box = $('obList'); box.replaceChildren();
   list.forEach(m => { const c = el('div', undefined, 'card'); c.append(el('div', `To: ${m.to_addr}`), el('strong', m.subject), el('pre', m.body), el('div', `${m.status} · ${m.created_at}`, 'muted')); box.append(c); });
   if (!list.length) box.append(el('div', 'No drafts.', 'muted'));
+}
+// ---------------------------------------------------------------- hiring
+const LABEL = {applied:'Applied', selected:'Selected', on_hold:'On hold', offer:'Offer', offer_accepted:'Accepted', joined:'Joined', rejected:'Rejected'};
+let hBoards = [];
+async function loadHiring() {
+  const data = await api('/api/hiring/board');
+  hBoards = data.board;
+  const sel = $('hJob'), keep = sel.value;
+  sel.replaceChildren(...hBoards.map(b => { const o = el('option', `${b.title} (${b.job_id})`); o.value = b.job_id; return o; }));
+  if (keep) sel.value = keep;
+  drawBoard(); loadFollowups();
+}
+function drawBoard() {
+  const b = hBoards.find(x => x.job_id === $('hJob').value) || hBoards[0]; if (!b) return;
+  $('hRounds').textContent = 'Rounds: ' + b.rounds.join(' → ');
+  $('hBoard').replaceChildren(...b.columns.map(c => {
+    const col = el('div', undefined, 'col'); const h = el('h4'); h.append(el('span', LABEL[c.key] || c.key), el('span', String(c.count))); col.append(h);
+    c.candidates.forEach(x => { const card = el('div', undefined, 'cand'); card.append(el('b', x.name), el('span', `${x.id} · score ${x.score ?? '-'}`, 'muted'), el('div', x.status_note || '', 'muted'));
+      card.onclick = () => candidate(x.id); col.append(card); });
+    return col;
+  }));
+}
+$('hJob').onchange = drawBoard; $('hRefresh').onclick = loadHiring;
+$('hRoundsEdit').onclick = async () => {
+  const b = hBoards.find(x => x.job_id === $('hJob').value) || hBoards[0];
+  const v = prompt('Rounds in order, separated by spaces', b.rounds.join(' ')); if (!v) return;
+  await api(`/api/hiring/jobs/${b.job_id}/rounds`, {rounds: v.split(/[\s,]+/).filter(Boolean)}); loadHiring();
+};
+async function upload(files) {
+  const job = $('hJob').value; const list = [];
+  for (const f of files) { const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; buf.forEach(b => bin += String.fromCharCode(b)); list.push({name: f.name, content_b64: btoa(bin)}); }
+  $('hMsg').textContent = `Uploading ${list.length} file(s)...`;
+  try { const r = await api('/api/hiring/upload', {job_id: job, files: list});
+    $('hMsg').textContent = `Added ${r.added.length}: ` + r.added.map(a => `${a.name} → ${LABEL[a.stage] || a.stage}`).join(', ') + (r.duplicates.length ? ` · duplicates: ${r.duplicates.join(', ')}` : '') + (r.unreadable.length ? ` · unreadable: ${r.unreadable.join(', ')}` : '');
+    loadHiring();
+  } catch (e) { $('hMsg').textContent = e.message; }
+}
+$('hFiles').onchange = e => upload(e.target.files);
+['dragover','dragenter'].forEach(ev => $('hDrop').addEventListener(ev, e => { e.preventDefault(); $('hDrop').classList.add('over'); }));
+['dragleave','drop'].forEach(ev => $('hDrop').addEventListener(ev, e => { e.preventDefault(); $('hDrop').classList.remove('over'); }));
+$('hDrop').addEventListener('drop', e => upload(e.dataTransfer.files));
+async function loadFollowups() {
+  const r = await api('/api/hiring/followups?days=14'); const box = $('hFollow'); box.replaceChildren(el('h3', 'Follow-ups (next 14 days)'));
+  if (!r.followups.length) box.append(el('div', 'Nothing due.', 'muted'));
+  r.followups.forEach(f => { const row = el('div', undefined, 'row'); row.append(el('span', `${f.due}  ${f.name}: ${f.note}`));
+    const d = el('button', 'Done', 'btn'); d.onclick = async () => { await api(`/api/hiring/followups/${f.id}/done`, {}); loadFollowups(); }; row.append(d); box.append(row); });
+}
+function field(label, input) { const w = el('label', undefined, 'muted'); w.append(el('div', label), input); return w; }
+function inp(type, ph) { const i = el('input'); i.type = type; if (ph) i.placeholder = ph; return i; }
+async function candidate(id) {
+  const t = await api(`/api/hiring/candidates/${id}`); const c = t.candidate; const box = el('div', undefined, 'card');
+  box.append(el('h3', `${c.name} · ${c.id}`), el('div', `${LABEL[c.stage] || c.stage} · score ${c.score ?? '-'} · ${c.years ?? 0} yrs · ${c.email || ''} ${c.phone || ''}`, 'muted'),
+             el('div', `Skills: ${(c.skills || []).join(', ') || '-'}`), el('div', c.status_note || '', 'muted'));
+  const act = el('div', undefined, 'grid2'); act.style.marginTop = '10px';
+  const say = el('div', '', 'muted');
+  const run = async (action, body) => { try { await api(`/api/hiring/candidates/${c.id}/${action}`, body); await loadHiring(); candidate(c.id); } catch (e) { say.textContent = e.message; say.className = 'err'; } };
+  if (['selected','interviewing','on_hold'].includes(c.stage)) {
+    const r = el('select'); t.rounds.forEach(n => { const o = el('option', n); o.value = n; r.append(o); }); if (t.next_round) r.value = t.next_round;
+    const when = inp('datetime-local'); const who = inp('text', 'Interviewer');
+    const go = el('button', 'Schedule round', 'btn primary'); go.onclick = () => run('schedule', {round: r.value, when: when.value, interviewer: who.value});
+    act.append(field('Round', r), field('When', when), field('Interviewer', who), go);
+    const res = el('select'); ['pass','fail','hold'].forEach(n => { const o = el('option', n); o.value = n; res.append(o); });
+    const rating = el('select'); ['', '1','2','3','4','5'].forEach(n => { const o = el('option', n || 'rating'); o.value = n; rating.append(o); });
+    const fb = inp('text', 'Panel feedback'); const r2 = r.cloneNode(true); r2.value = r.value;
+    const rec = el('button', 'Record result', 'btn primary'); rec.onclick = () => run('result', {round: r2.value, result: res.value, rating: rating.value, feedback: fb.value});
+    act.append(field('Round', r2), field('Result', res), field('Rating', rating), field('Feedback', fb), rec);
+  }
+  if (c.stage === 'offer') { const ctc = inp('number', 'CTC (LPA)'); const jd = inp('date'); const b = el('button', 'Request offer approval', 'btn primary');
+    b.onclick = () => run('offer', {ctc_lpa: ctc.value, joining_date: jd.value}); act.append(field('CTC (lakh per annum)', ctc), field('Joining date', jd), b); }
+  if (t.offers.some(o => o.status === 'sent')) { const jd = inp('date'); const y = el('button', 'Offer accepted', 'btn primary'), n = el('button', 'Offer declined', 'btn');
+    y.onclick = () => run('offer_response', {accepted: true, joining_date: jd.value}); n.onclick = () => run('offer_response', {accepted: false}); act.append(field('Joining date (if changed)', jd), y, n); }
+  if (c.stage === 'offer_accepted') { const j = el('button', 'Mark joined', 'btn primary'); j.onclick = () => run('joined', {}); act.append(j); }
+  const mv = el('select'); ['selected','on_hold','rejected','withdrawn'].forEach(n => { const o = el('option', n); o.value = n; mv.append(o); });
+  const note = inp('text', 'Reason'); const m = el('button', 'Move', 'btn'); m.onclick = () => run('move', {stage: mv.value, note: note.value});
+  act.append(field('Move to', mv), field('Note', note), m);
+  box.append(act, say);
+  if (t.interviews.length) { box.append(el('h4', 'Interviews')); t.interviews.forEach(i => box.append(el('div', `${i.round} · ${i.scheduled_at || ''} · ${i.interviewer || ''} · ${i.status}${i.result ? ' · ' + i.result : ''}${i.rating ? ' · ' + i.rating + '/5' : ''} ${i.feedback || ''}`))); }
+  if (t.offers.length) { box.append(el('h4', 'Offers')); t.offers.forEach(o => box.append(el('div', `${o.ctc_lpa} LPA · joining ${o.joining_date} · ${o.status}`))); }
+  box.append(el('h4', 'Timeline'), el('pre', t.events.map(e => `${e.ts}  ${e.actor}: ${e.event} ${e.detail || ''}`).join('\n')));
+  $('hDetail').replaceChildren(box); box.scrollIntoView({behavior: 'smooth'});
 }
 api('/api/me').then(start).catch(() => {});
 </script>
