@@ -1,0 +1,8 @@
+Name: Rahul Verma
+Email: rahul.verma@example.com
+Years of experience: 2
+Summary: Junior developer with full-stack exposure.
+Skills: JavaScript, React, Node.js, Python (basic), MongoDB
+Experience:
+- 2024-2026 Software Developer, WebCraft: built React dashboards.
+Education: B.Sc Computer Science

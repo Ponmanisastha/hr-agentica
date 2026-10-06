@@ -1,0 +1,8 @@
+Name: Karthik N
+Email: karthik.n@example.com
+Years of experience: 4
+Summary: Data engineer moving into backend roles.
+Skills: Python, SQL, Spark, Airflow, PostgreSQL, Docker
+Experience:
+- 2022-2026 Data Engineer, Insightly: ETL pipelines in Python and SQL.
+Education: B.E. Information Technology

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HR Agent Console</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#667085; --line:#e3e6ec; --accent:#2f5bd3; --ok:#1b7f4c; --warn:#b54708; --bad:#b42318; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171d; --card:#1c2029; --ink:#e7e9ee; --muted:#9aa3b2; --line:#2c323d; --accent:#7ea2ff; --ok:#4cc38a; --warn:#f2a65a; --bad:#f97066; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--card); flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0 auto 0 0; }
+  nav button, .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); padding:6px 12px; border-radius:8px; cursor:pointer; font:inherit; }
+  nav button.on, .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  main { max-width:980px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
+  input, textarea, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+  textarea { min-height:70px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .muted { color:var(--muted); font-size:13px; }
+  pre { white-space:pre-wrap; word-break:break-word; background:var(--bg); padding:10px; border-radius:8px; margin:8px 0 0; max-height:420px; overflow:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
+  .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; min-width:80px; }
+  .bar span { display:block; height:100%; background:var(--accent); }
+  .hidden { display:none; }
+  .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>HR Agent Console</h1>
+  <nav id="nav" class="row hidden"></nav>
+  <span id="who" class="muted"></span>
+  <button id="logout" class="btn hidden">Log out</button>
+</header>
+<main>
+  <section id="login" class="card" style="max-width:380px;margin:40px auto">
+    <h2 style="margin-top:0">Sign in</h2>
+    <p><input id="u" placeholder="Username" autocomplete="username"></p>
+    <p><input id="p" placeholder="Password" type="password" autocomplete="current-password"></p>
+    <button id="go" class="btn primary">Sign in</button> <span id="loginErr" class="err"></span>
+  </section>
+  <section id="ask" class="hidden">
+    <div class="card">
+      <textarea id="q" placeholder="Ask anything: 'Onboard Vikram Singh', 'I need sick leave 2026-10-12 to 2026-10-13', 'How many casual leave days do we get?'"></textarea>
+      <div class="row" style="margin-top:8px"><button id="send" class="btn primary">Send</button><span id="busy" class="muted"></span></div>
+    </div>
+    <div id="answers"></div>
+  </section>
+  <section id="approvals" class="hidden"><div class="card"><h3 style="margin-top:0">Waiting for your approval</h3><div id="apList"></div></div></section>
+  <section id="tickets" class="hidden"><div class="card"><h3 style="margin-top:0">Tickets</h3><div id="tkList"></div></div><div id="tkDetail"></div></section>
+  <section id="budget" class="hidden"><div class="card"><h3 style="margin-top:0">AI budget this month</h3><div id="bdList"></div></div></section>
+  <section id="outbox" class="hidden"><div class="card"><h3 style="margin-top:0">Email drafts (never sent automatically)</h3><div id="obList"></div></div></section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const el = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
+let me = null;
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+const TABS = [['ask','Ask',()=>true],['approvals','Approvals',r=>['admin','hr','manager'].includes(r)],['tickets','Tickets',r=>['admin','hr'].includes(r)],
+              ['budget','Budget',r=>['admin','hr'].includes(r)],['outbox','Outbox',r=>['admin','hr'].includes(r)]];
+function show(tab) {
+  TABS.forEach(([id]) => $(id).classList.toggle('hidden', id !== tab));
+  [...$('nav').children].forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  ({approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
+}
+function start(user) {
+  me = user; $('login').classList.add('hidden'); $('logout').classList.remove('hidden');
+  $('who').textContent = `${user.username} (${user.role})`;
+  const nav = $('nav'); nav.replaceChildren(); nav.classList.remove('hidden');
+  TABS.filter(t => t[2](user.role)).forEach(([id, label]) => { const b = el('button', label); b.dataset.tab = id; b.onclick = () => show(id); nav.append(b); });
+  show('ask');
+}
+$('go').onclick = async () => {
+  try { start(await api('/api/login', {username:$('u').value, password:$('p').value})); }
+  catch (e) { $('loginErr').textContent = e.message; }
+};
+$('p').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+$('logout').onclick = async () => { await api('/api/logout', {}); location.reload(); };
+$('send').onclick = async () => {
+  const q = $('q').value.trim(); if (!q) return;
+  $('busy').textContent = 'Working...';
+  const card = el('div', undefined, 'card'); card.append(el('div', q, 'muted'));
+  try {
+    const r = await api('/api/ask', {request:q, conversation_id:'web'});
+    card.append(el('pre', r.result));
+    card.append(el('div', `${r.agent} agent · ${r.mode} · ${r.trace.length} tool calls`, 'muted'));
+    const row = el('div', undefined, 'row');
+    const up = el('button', '👍 Helpful', 'btn'), down = el('button', '👎 Wrong or unhelpful', 'btn');
+    up.onclick = () => api('/api/feedback', {request:q, answer:r.result, rating:1, agent:r.agent}).then(() => row.replaceChildren(el('span','Thanks!','muted')));
+    down.onclick = async () => {
+      const comment = prompt('What was wrong? (this becomes a ticket)') || '';
+      const f = await api('/api/feedback', {request:q, answer:r.result, rating:-1, comment, agent:r.agent});
+      row.replaceChildren(el('span', `Thanks, logged as ticket #${f.ticket_id}`, 'muted'));
+    };
+    row.append(up, down); card.append(row);
+  } catch (e) { card.append(el('div', e.message, 'err')); }
+  $('answers').prepend(card); $('busy').textContent = ''; $('q').value = '';
+};
+async function loadApprovals() {
+  const list = await api('/api/approvals'); const box = $('apList'); box.replaceChildren();
+  if (!list.length) return box.append(el('div', 'Nothing waiting.', 'muted'));
+  list.forEach(a => {
+    const row = el('div', undefined, 'card'); row.append(el('div', `#${a.id} ${a.kind}: ${a.summary}`), el('div', `requested by ${a.requested_by} at ${a.created_at}`, 'muted'));
+    const b = el('div', undefined, 'row');
+    [['Approve', true], ['Reject', false]].forEach(([l, v]) => { const x = el('button', l, v ? 'btn primary' : 'btn'); x.onclick = async () => { await api(`/api/approvals/${a.id}`, {approve:v}); loadApprovals(); }; b.append(x); });
+    row.append(b); box.append(row);
+  });
+}
+async function loadTickets() {
+  const list = await api('/api/tickets'); const t = el('table');
+  t.append(Object.assign(el('tr'), {innerHTML:'<th>#</th><th>Title</th><th>Kind</th><th>Status</th><th>Seen</th>'}));
+  list.forEach(k => { const tr = el('tr'); [k.id, k.title, k.kind, k.status, k.occurrences].forEach(v => tr.append(el('td', String(v ?? '')))); tr.style.cursor='pointer'; tr.onclick = () => ticket(k.id); t.append(tr); });
+  $('tkList').replaceChildren(list.length ? t : el('div', 'No tickets.', 'muted'));
+}
+async function ticket(id) {
+  const k = await api(`/api/tickets/${id}`); const c = el('div', undefined, 'card');
+  c.append(el('h3', `#${k.id} ${k.title}`), el('div', `${k.kind} · ${k.severity} · ${k.status}${k.pr_url ? ' · ' + k.pr_url : ''}`, 'muted'), el('pre', k.detail));
+  if (k.review) c.append(el('div', 'AI review'), el('pre', k.review));
+  if (k.patch) c.append(el('div', 'Proposed patch'), el('pre', k.patch));
+  if (k.resolution) c.append(el('div', 'Resolution: ' + k.resolution));
+  c.append(el('div', 'History'), el('pre', k.events.map(e => `${e.ts} ${e.actor}: ${e.event} ${e.detail || ''}`).join('\n')));
+  const row = el('div', undefined, 'row');
+  if (me.role === 'admin' && ['new','triaged'].includes(k.status)) { const w = el('button', 'Let the agent work it', 'btn primary'); w.onclick = async () => { w.textContent='Working...'; await api(`/api/tickets/${id}/work`, {}); ticket(id); loadTickets(); }; row.append(w); }
+  if (me.role === 'admin' && k.status === 'awaiting_approval') {
+    [['Approve and merge', true], ['Reject', false]].forEach(([l, v]) => { const x = el('button', l, v ? 'btn primary' : 'btn'); x.onclick = async () => { const note = v ? '' : (prompt('Reason?') || ''); await api(`/api/tickets/${id}/decide`, {approve:v, note}); ticket(id); loadTickets(); }; row.append(x); });
+  }
+  c.append(row); $('tkDetail').replaceChildren(c);
+}
+async function loadBudget() {
+  const b = await api('/api/budget'); const t = el('table');
+  t.append(Object.assign(el('tr'), {innerHTML:'<th>Agent</th><th>Spent</th><th>Budget</th><th>Used</th><th>Calls</th><th>When over</th>'}));
+  b.agents.forEach(a => { const tr = el('tr'); [a.agent, '$' + a.spent_usd.toFixed(4), '$' + a.budget_usd.toFixed(2)].forEach(v => tr.append(el('td', v)));
+    const bar = el('div', undefined, 'bar'); const s = el('span'); s.style.width = Math.min(100, a.used_pct) + '%'; bar.append(s); const td = el('td'); td.append(bar, el('span', a.used_pct + '%', 'muted')); tr.append(td, el('td', String(a.calls)), el('td', a.on_exceed)); t.append(tr); });
+  $('bdList').replaceChildren(t, el('p', `Total: $${b.total.spent_usd.toFixed(4)} of $${b.total.budget_usd.toFixed(2)} since ${b.month_from}`, 'muted'));
+}
+async function loadOutbox() {
+  const list = await api('/api/outbox'); const box = $('obList'); box.replaceChildren();
+  list.forEach(m => { const c = el('div', undefined, 'card'); c.append(el('div', `To: ${m.to_addr}`), el('strong', m.subject), el('pre', m.body), el('div', `${m.status} · ${m.created_at}`, 'muted')); box.append(c); });
+  if (!list.length) box.append(el('div', 'No drafts.', 'muted'));
+}
+api('/api/me').then(start).catch(() => {});
+</script>
+</body>
+</html>

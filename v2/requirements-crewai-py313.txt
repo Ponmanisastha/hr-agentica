@@ -1,0 +1,11 @@
+# Optional: run the screening crew on real CrewAI. CrewAI does not support Python 3.14 yet (it requires < 3.14
+# and pins chromadb 1.1), so use a separate Python 3.13 virtual environment for this:
+#   python3.13 -m venv .venv313 && . .venv313/bin/activate && pip install -r requirements-crewai-py313.txt
+# On Python 3.14 the same three-role crew runs on LangGraph instead (hrai/agents/crew.py).
+crewai==1.15.23
+langgraph>=1.2.13,<2
+langgraph-checkpoint-sqlite>=3.1,<4
+langchain-core>=1.6,<2
+litellm>=1.104,<2
+mcp>=2.3,<3
+bcrypt>=5,<6
