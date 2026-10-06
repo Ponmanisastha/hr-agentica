@@ -215,6 +215,15 @@ def ai_usage(days=30):
             "answer_cache_hits": (db.q1("SELECT COALESCE(SUM(hits),0) AS n FROM answer_cache") or {}).get("n", 0)}
 
 
+def payroll_numbers():
+    from . import payroll
+    month = config.today().strftime("%Y-%m")
+    s = payroll.summary(month)
+    return {"month": month, "status": s["status"], "employees": s.get("employees", 0), "net": s.get("net", 0),
+            "gross": s.get("gross", 0), "employer_cost": s.get("employer_cost", 0),
+            "statutory": s.get("statutory", {}), "warnings": s.get("warnings", []), "history": payroll.history()}
+
+
 def operations():
     tickets = db.q("SELECT status, kind FROM tickets")
     fb = db.q("SELECT rating FROM feedback")
@@ -257,6 +266,19 @@ def attention(limit=12):
         blocked = db.q1("SELECT COUNT(*) AS n FROM onboarding_tasks WHERE hire_id=? AND status LIKE 'blocked%'", (h["id"],))
         if blocked and blocked["n"]:
             add(1, f"{h['name']} joins on {h['start_date']} with documents still missing", "ask", h["id"], "critical")
+    try:
+        from . import payroll
+        m = config.today().strftime("%Y-%m")
+        pr = payroll.summary(m)
+        if config.today().day >= 25 and pr["status"] in ("not_started", "draft"):
+            add(2, f"Payroll for {m} is {'not run yet' if pr['status'] == 'not_started' else 'still a draft'}", "payroll",
+                m, "warning")
+        elif pr["status"] == "pending_approval":
+            add(2, f"Payroll for {m} is waiting for approval (net {pr['net']:,})", "approvals", m, "warning")
+        for w in pr.get("warnings", [])[:3]:
+            add(3, f"Payroll detail missing: {w}", "payroll", m)
+    except Exception:  # payroll is optional for the attention list
+        pass
     tk = db.q("SELECT id, title FROM tickets WHERE status='awaiting_approval'")
     for k in tk:
         add(3, f"Fix ready for review: ticket #{k['id']} {k['title']}", "tickets", k["id"])
@@ -276,6 +298,7 @@ def attention(limit=12):
 
 def overview(job_id=None):
     h, w, lv, ob, ai, ops = hiring(job_id), workforce(), leave(), onboarding(), ai_usage(), operations()
+    pay = payroll_numbers()
     soon = (config.today() + timedelta(days=30)).isoformat()
     week = (config.today() + timedelta(days=7)).isoformat()
     t = config.today().isoformat()
@@ -291,9 +314,10 @@ def overview(job_id=None):
         "leave_pending": lv["pending"],
         "ai_spend_usd": ai["total"]["spent_usd"], "ai_budget_usd": ai["total"]["budget_usd"],
         "open_tickets": ops["open_tickets"],
+        "payroll_net": pay["net"], "payroll_status": pay["status"], "payroll_month": pay["month"],
     }
     return {"as_of": t, "kpis": kpis, "attention": attention(), "hiring": h, "workforce": w, "leave": lv,
-            "onboarding": ob, "ai": ai, "operations": ops}
+            "onboarding": ob, "ai": ai, "operations": ops, "payroll": pay}
 
 
 def narrate(data=None):
@@ -324,6 +348,10 @@ def narrate(data=None):
     ob = d["onboarding"]
     if ob["tasks"]:
         lines.append(f"- Onboarding: {ob['done']} of {ob['tasks']} tasks done, {ob['blocked']} blocked, {ob['overdue']} overdue.")
+    if d["payroll"]["employees"] or d["payroll"]["status"] != "not_started":
+        p = d["payroll"]
+        lines.append(f"- Payroll {p['month']} ({p['status'].replace('_', ' ')}): net Rs {p['net']:,} for {p['employees']} "
+                     f"employees, employer cost Rs {p['employer_cost']:,}.")
     lines.append(f"- AI spend this month: ${k['ai_spend_usd']:.2f} of ${k['ai_budget_usd']:.2f}. Open tickets: {k['open_tickets']}.")
     if d["attention"]:
         lines.append("Needs attention:")

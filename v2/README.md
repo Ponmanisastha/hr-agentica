@@ -39,7 +39,7 @@ python app.py budget                                # spend vs budget per agent
 python app.py budget set screening 20 --on-exceed block
 ```
 
-Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
+Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
 
 ## Hiring pipeline
 
@@ -84,6 +84,30 @@ python app.py ask "How is hiring going?"
 A snapshot is saved to `var/reports/` every morning (`insights_report` trigger); on Mondays it is also drafted as an
 email to HR (`HRAI_HR_EMAIL`).
 
+## Salary and payroll
+
+Indian payroll: CTC breakup (basic, HRA, special allowance, employer PF, gratuity), employee PF and ESI, professional
+tax by state, and TDS under the new or the old regime, projected across the financial year. Employees see their own
+payslip on **My pay**; HR runs payroll on the **Payroll** page.
+
+```bash
+python app.py payroll run --month 2026-10      # draft: pay, PF, ESI, PT and TDS for everyone
+python app.py payroll show --month 2026-10
+python app.py payroll submit --month 2026-10   # goes to Approvals; someone else must approve it
+python app.py payroll paid NEFT-5521 --month 2026-10
+python app.py payroll slip E101 --month 2026-10
+python app.py ask "What is the breakup for a 12 lakh CTC?"
+python app.py ask "Give Deepa a 10% hike from next month"     # waits for approval
+```
+
+A salary revision and a payroll run both need human approval, and payroll cannot be approved by whoever submitted it.
+Approval writes payslips and `var/payroll/<month>/bank_transfer.csv`; **nothing is ever paid from here**. HR uploads
+that file to the bank and then records the reference. An approved month is locked: fix it next month with an arrears
+or recovery item.
+
+Rates, slabs and the professional-tax tables live in `data/payroll_rules.json`. Check them with your CA at the start
+of each financial year and edit that file; no code change is needed.
+
 ## Tickets and auto-fixes
 
 ```bash
@@ -109,7 +133,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 43 tests, offline, about 15 seconds
+python -m unittest discover -s tests -t .     # 57 tests, offline, about 16 seconds
 ```
 
 ## Layout
@@ -123,11 +147,13 @@ python -m unittest discover -s tests -t .     # 43 tests, offline, about 15 seco
 | `hrai/tools.py` | The HR tools (LangChain), with role checks |
 | `hrai/hiring.py` | Hiring pipeline: inbox, screening, rounds, offers, joining, follow-ups |
 | `hrai/insights.py` | HR analytics, the needs-attention list, daily report, CSV export |
+| `hrai/payroll.py` | Salary structures, Indian payroll, payslips, payroll runs |
 | `hrai/auth.py`, `hrai/db.py` | Logins and roles; SQLite schema |
 | `hrai/hooks.py`, `hooks.d/` | Hooks |
 | `hrai/triggers.py`, `hrai/automations.py` | Triggers |
 | `hrai/skills.py`, `skills/` | Skills |
 | `hrai/a2a.py`, `hrai/mcp_server.py`, `hrai/web.py` | A2A, MCP, web console and API |
 | `hrai/ops/` | Ticket tracker and ticket agent |
+| `data/payroll_rules.json` | PF, ESI, professional tax and income-tax rates, editable each year |
 | `data/` | Sample HR data (same as v1); `kb_additions.md` appears when approved fixes add to the handbook |
 | `var/` | Runtime state: database, vectors, reports, worktrees (git-ignored) |

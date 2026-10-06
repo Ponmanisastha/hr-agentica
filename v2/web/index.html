@@ -79,6 +79,7 @@
   textarea { min-height:84px; resize:vertical; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .grid { display:grid; gap:16px; }
+  .grid > *, .tiles > *, .kpis > * { min-width:0; }
   .g2 { grid-template-columns:repeat(2, minmax(0,1fr)); }
   .g3 { grid-template-columns:repeat(3, minmax(0,1fr)); }
   .section-title { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:28px 0 10px; }
@@ -176,7 +177,8 @@
   @media (max-width: 1100px) { .kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .kpis .hero { grid-column:1 / -1; } .tiles { grid-template-columns:repeat(2, minmax(0,1fr)); } }
   @media (max-width: 860px) {
     .app { grid-template-columns:1fr; }
-    .side { position:static; height:auto; flex-direction:row; align-items:center; overflow-x:auto; padding:8px 16px; border-right:0; border-bottom:1px solid var(--ring); }
+    .app { grid-template-rows:auto 1fr; }
+    .side { position:static; height:auto; min-width:0; flex-direction:row; align-items:center; overflow-x:auto; padding:8px 16px; border-right:0; border-bottom:1px solid var(--ring); }
     .brand { padding:0 8px 0 0; } .brand span { display:none; }
     .navbtn { width:auto; white-space:nowrap; } .navbtn .count { display:none; }
     .side .foot { margin:0 0 0 auto; border:0; padding:0; flex-direction:row; align-items:center; }
@@ -263,7 +265,7 @@
           </div>
           <div class="section-title">People</div>
           <div class="tiles" style="margin-top:0">
-            <div class="card tile"><div class="label">Headcount</div><div id="kHead" class="value">–</div></div>
+            <div class="card tile"><div class="label">Headcount</div><div id="kHead" class="value">–</div><div id="kPayNote" class="note"></div></div>
             <div class="card tile"><div class="label">Leave requests pending</div><div id="kLeave" class="value">–</div><div id="kLeaveNote" class="note"></div></div>
             <div class="card tile"><div class="label">Onboarding tasks done</div><div id="kOnb" class="value">–</div><div id="kOnbMeter" class="meter" style="margin-top:10px"><span></span></div><div id="kOnbNote" class="note"></div></div>
             <div class="card tile"><div class="label">Open tickets</div><div id="kTickets" class="value">–</div><div id="kTicketsNote" class="note"></div></div>
@@ -304,6 +306,41 @@
         <div class="grid g2" style="margin-top:4px;align-items:start">
           <div id="hFollow" class="card"></div>
           <div id="hDetail"></div>
+        </div>
+      </section>
+
+      <!-- payroll -->
+      <section id="payroll" class="hidden">
+        <div class="filters">
+          <select id="pMonth" aria-label="Payroll month"></select>
+          <button id="pRun" class="btn primary">Run payroll</button>
+          <button id="pSubmit" class="btn">Submit for approval</button>
+          <button id="pPaid" class="btn">Mark paid</button>
+          <a id="pBank" class="btn hidden" href="/api/payroll/bank.csv" download>Bank transfer file</a>
+          <span id="pStatus" class="muted asof"></span>
+        </div>
+        <div id="pMsg" class="muted" style="margin-bottom:12px"></div>
+        <div class="tiles" style="margin-top:0">
+          <div class="card tile"><div class="label">Net pay</div><div id="pNet" class="value">–</div><div id="pNetNote" class="note"></div></div>
+          <div class="card tile"><div class="label">Gross</div><div id="pGross" class="value">–</div><div class="note">before deductions</div></div>
+          <div class="card tile"><div class="label">Employer cost</div><div id="pCost" class="value">–</div><div class="note">gross plus PF and ESI</div></div>
+          <div class="card tile"><div class="label">Statutory dues</div><div id="pStat" class="value">–</div><div id="pStatNote" class="note"></div></div>
+        </div>
+        <div class="grid g2" style="margin-top:16px;align-items:start">
+          <div class="card"><div class="card-head"><div><h3>This month's payslips</h3><div class="sub">Click a row to see the payslip</div></div></div><div id="pSlips" class="table-wrap"></div></div>
+          <div>
+            <div class="card"><div class="card-head"><div><h3>Payroll cost by month</h3><div class="sub">Net pay of past runs</div></div><button class="btn ghost" data-table="cPayroll">Table</button></div><div id="cPayroll"></div></div>
+            <div class="card"><div class="card-head"><div><h3>Salaries</h3><div class="sub">Current CTC per employee</div></div><button id="pNew" class="btn ghost">Set up salary</button></div><div id="pStruct" class="table-wrap"></div></div>
+          </div>
+        </div>
+        <div id="pDetail"></div>
+      </section>
+
+      <!-- my pay -->
+      <section id="mypay" class="hidden">
+        <div class="card">
+          <div class="row"><strong>Payslip</strong> <select id="myMonth" style="width:auto;min-width:180px" aria-label="Month"></select></div>
+          <div id="myBody" style="margin-top:12px"></div>
         </div>
       </section>
 
@@ -348,16 +385,19 @@ const ICONS = {
   tickets:'<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v8a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M13 6v12"/>',
   budget:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
   outbox:'<path d="M4 4h16v16H4z"/><path d="m4 6 8 7 8-7"/>',
+  payroll:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  mypay:'<path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
 };
 const HR = r => ['admin','hr'].includes(r);
-const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['hiring','Hiring',HR],['approvals','Approvals',r=>['admin','hr','manager'].includes(r)],
+const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['hiring','Hiring',HR],['payroll','Payroll',HR],
+              ['mypay','My pay',r=>!HR(r)],['approvals','Approvals',r=>['admin','hr','manager'].includes(r)],
               ['tickets','Tickets',HR],['budget','AI budget',HR],['outbox','Outbox',HR]];
 function show(tab) {
   TABS.forEach(([id]) => $(id).classList.toggle('hidden', id !== tab));
   [...$('nav').children].forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'); });
   $('pageTitle').textContent = (TABS.find(t => t[0] === tab) || [])[1] || '';
   store.set('hr-tab', tab);
-  ({dashboard:loadDashboard, hiring:loadHiring, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
+  ({dashboard:loadDashboard, hiring:loadHiring, payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
 }
 function start(user) {
   me = user; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -491,7 +531,7 @@ const STATUS_ICON = {
   good:'<circle cx="8" cy="8" r="7" fill="var(--good)"/><path d="m5 8.2 2 2 4-4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>',
 };
 const STATUS_LABEL = {critical:'Urgent', warning:'Soon', info:'To do', good:'Done'};
-function statusTag(kind) { const s = el('span', undefined, 'status'); const i = svgEl('svg', {viewBox:'0 0 16 16', 'aria-hidden':'true'}); i.innerHTML = STATUS_ICON[kind] || STATUS_ICON.info; s.append(i, el('span', STATUS_LABEL[kind] || 'To do')); return s; }
+function statusTag(kind, label) { const s = el('span', undefined, 'status'); const i = svgEl('svg', {viewBox:'0 0 16 16', 'aria-hidden':'true'}); i.innerHTML = STATUS_ICON[kind] || STATUS_ICON.info; s.append(i, el('span', label || STATUS_LABEL[kind] || 'To do')); return s; }
 
 // ---------------------------------------------------------------- dashboard
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -509,7 +549,9 @@ async function loadDashboard() {
   $('kInterviews').textContent = fmt(k.interviews_7d); $('kOffers').textContent = fmt(k.offers_out); $('kJoining').textContent = fmt(k.joining_30d); $('kFollow').textContent = fmt(k.followups_due);
   $('kToOffer').textContent = h.time_to_offer_days ?? '–'; $('kToAccept').textContent = h.time_to_accept_days ?? '–'; $('kToJoin').textContent = h.time_to_join_days ?? '–';
   $('kAccept').textContent = h.offer_acceptance_pct === null ? '–' : h.offer_acceptance_pct + '%';
-  $('kHead').textContent = fmt(k.headcount); $('kLeave').textContent = fmt(k.leave_pending); $('kLeaveNote').textContent = `${d.leave.upcoming_days_30} approved days in the next 30`;
+  $('kHead').textContent = fmt(k.headcount);
+  $('kPayNote').textContent = k.payroll_status === 'not_started' ? `payroll for ${monthLabel(k.payroll_month)} not run yet`
+    : `payroll ${monthLabel(k.payroll_month)}: ${inr(k.payroll_net)} ${PSTATUS[k.payroll_status] || k.payroll_status}`; $('kLeave').textContent = fmt(k.leave_pending); $('kLeaveNote').textContent = `${d.leave.upcoming_days_30} approved days in the next 30`;
   const ob = d.onboarding; $('kOnb').textContent = ob.pct_done === null ? '–' : ob.pct_done + '%'; $('kOnbMeter').firstElementChild.style.width = (ob.pct_done || 0) + '%';
   $('kOnbNote').textContent = ob.tasks ? `${ob.done} of ${ob.tasks} · ${ob.blocked} blocked · ${ob.overdue} overdue` : 'No onboarding tasks yet';
   $('kTickets').textContent = fmt(k.open_tickets); $('kTicketsNote').textContent = d.operations.helpful_pct === null ? 'no answer feedback yet' : `${d.operations.helpful_pct}% of answers rated helpful`;
@@ -547,7 +589,7 @@ async function loadDashboard() {
   const bl = el('div'); ai.agents.forEach(a => {
     const kind = a.used_pct >= 100 ? 'critical' : a.used_pct >= 80 ? 'warning' : '';
     const r = el('div'); r.style.margin = '0 0 12px';
-    const top = el('div', undefined, 'row'); top.append(el('span', a.agent)); if (kind) top.append(statusTag(kind));
+    const top = el('div', undefined, 'row'); top.append(el('span', a.agent)); if (kind) top.append(statusTag(kind, kind === 'critical' ? 'Over budget' : 'Near budget'));
     top.append(Object.assign(el('span', `${usd(a.spent_usd)} of ${usd(a.budget_usd)} · ${a.used_pct}%`, 'muted'), {style:'margin-left:auto'}));
     const m = el('div', undefined, 'meter ' + kind); const sp = el('span'); sp.style.width = Math.min(100, a.used_pct) + '%'; m.append(sp); m.style.marginTop = '6px';
     hoverable(m, a.used_pct + '%', `${a.agent} · ${a.calls} calls`, 'var(--accent)'); r.append(top, m); bl.append(r); });
@@ -559,8 +601,8 @@ $('dJob').onchange = loadDashboard; $('dRefresh').onclick = loadDashboard;
 
 // ---------------------------------------------------------------- assistant
 function examples() {
-  const list = HR(me.role) ? ['What needs my attention today?', 'How is hiring going?', 'Read the new resumes in the inbox', 'What follow-ups are due this week?', 'Onboard Vikram Singh']
-    : ['How many casual leave days do we get?', 'I need casual leave on 2026-10-08', 'Who approves my leave?'];
+  const list = HR(me.role) ? ['What needs my attention today?', 'How is hiring going?', 'Read the new resumes in the inbox', 'Run payroll for this month', 'What is the breakup for a 12 lakh CTC?']
+    : ['How many casual leave days do we get?', 'Show my payslip', 'I need casual leave on 2026-10-08', 'Who approves my leave?'];
   $('examples').replaceChildren(...list.map(x => { const c = el('button', x, 'chip'); c.onclick = () => { $('q').value = x; $('send').click(); }; return c; }));
 }
 $('send').onclick = async () => {
@@ -585,6 +627,122 @@ $('send').onclick = async () => {
   $('answers').prepend(card); $('busy').textContent = ''; $('q').value = ''; $('send').disabled = false;
 };
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('send').click(); });
+
+// ---------------------------------------------------------------- payroll
+const inr = n => n === null || n === undefined ? '–' : '₹' + Number(n).toLocaleString('en-IN');
+const monthLabel = m => { const [y, mo] = m.split('-'); return `${MONTHS[+mo - 1]} ${y}`; };
+function monthOptions(sel, extra = []) {
+  const now = new Date(); const list = [];
+  for (let i = 0; i < 13; i++) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`); }
+  const all = [...new Set([...extra, ...list])].sort().reverse();
+  const keep = sel.value;
+  sel.replaceChildren(...all.map(m => Object.assign(el('option', monthLabel(m)), {value: m})));
+  if (keep && all.includes(keep)) sel.value = keep;
+  return sel.value;
+}
+const PSTATUS = {not_started:'not run yet', draft:'draft', pending_approval:'waiting for approval', approved:'approved', paid:'paid'};
+let pData = null;
+async function loadPayroll() {
+  const month = monthOptions($('pMonth'), pData ? pData.months : []);
+  let d; try { d = await api(`/api/payroll?month=${month}`); } catch (e) { return $('pMsg').textContent = e.message; }
+  pData = d; monthOptions($('pMonth'), d.months); $('pMonth').value = month;
+  const s = d.summary;
+  $('pStatus').textContent = `${monthLabel(s.month)} · ${PSTATUS[s.status] || s.status}` + (s.paid_reference ? ` · ref ${s.paid_reference}` : '');
+  $('pNet').textContent = inr(s.net); $('pNetNote').textContent = s.employees ? `${s.employees} employee${s.employees === 1 ? '' : 's'}` : 'nothing computed yet';
+  $('pGross').textContent = inr(s.gross); $('pCost').textContent = inr(s.employer_cost);
+  const st = s.statutory || {};
+  $('pStat').textContent = inr((st.pf_employee || 0) + (st.pf_employer || 0) + (st.esi_employee || 0) + (st.esi_employer || 0) + (st.professional_tax || 0) + (st.tds || 0));
+  $('pStatNote').textContent = s.employees ? `PF ${inr((st.pf_employee || 0) + (st.pf_employer || 0))} · TDS ${inr(st.tds)} · PT ${inr(st.professional_tax)}` : '';
+  $('pRun').disabled = ['pending_approval','approved','paid'].includes(s.status);
+  $('pSubmit').disabled = s.status !== 'draft'; $('pPaid').disabled = s.status !== 'approved';
+  $('pBank').classList.toggle('hidden', !['approved','paid'].includes(s.status)); $('pBank').href = `/api/payroll/bank.csv?month=${s.month}`;
+  const msg = $('pMsg'); msg.replaceChildren();
+  if (s.status === 'pending_approval') msg.append(el('span', 'Waiting on the Approvals page. Whoever submitted it cannot approve it.', 'muted'));
+  (s.warnings || []).forEach(w => { const row = el('div', undefined, 'row'); row.append(statusTag('warning', 'Check'), el('span', w)); msg.append(row); });
+  const t = el('table'); const hr = el('tr'); ['Employee','Paid days','Gross','Deductions','TDS','Net'].forEach((h, i) => hr.append(el('th', h, i ? 'num' : ''))); t.append(hr);
+  s.payslips.forEach(p => { const tr = el('tr', undefined, 'click'); const c0 = el('td'); c0.append(el('div', p.name), el('div', `${p.employee_id} · ${p.department || ''}`, 'muted'));
+    tr.append(c0, el('td', p.lop_days ? `${p.paid_days} (LOP ${p.lop_days})` : String(p.paid_days), 'num'), el('td', inr(p.gross), 'num'),
+              el('td', inr(p.deductions), 'num'), el('td', inr(p.tds), 'num'), el('td', inr(p.net), 'num'));
+    tr.onclick = () => payslipFor(p.employee_id); t.append(tr); });
+  $('pSlips').replaceChildren(s.payslips.length ? t : el('div', 'No payslips for this month yet. Run payroll to compute them.', 'empty'));
+  const hist = d.history.map(h => ({label:h.month, short:MONTHS[+h.month.split('-')[1] - 1], tip:monthLabel(h.month), value:h.net}));
+  columns('cPayroll', hist, {format:inr}); setTable('cPayroll', ['Month','Employees','Gross','Net','Employer cost'], d.history.map(h => [monthLabel(h.month), h.employees, h.gross, h.net, h.employer_cost]));
+  const st2 = el('table'); const hr2 = el('tr'); ['Employee','CTC','Monthly gross','Regime',''].forEach((h, i) => hr2.append(el('th', h, [1,2].includes(i) ? 'num' : ''))); st2.append(hr2);
+  d.structures.forEach(e => { const tr = el('tr'); const c0 = el('td'); c0.append(el('div', e.name), el('div', `${e.id} · ${e.department || ''}`, 'muted'));
+    if (e.missing.length) c0.append(statusTag('warning', 'Missing'), el('span', ' ' + e.missing.join(', '), 'muted'));
+    if (e.pending_revision) c0.append(el('div', `revision to ${inr(e.pending_revision.new_ctc)} waiting for approval`, 'muted'));
+    tr.append(c0, el('td', inr(e.ctc_annual), 'num'), el('td', inr(e.monthly_gross), 'num'), el('td', e.regime || '–'));
+    const act = el('td'); const b = el('button', e.ctc_annual ? 'Revise' : 'Set up', 'btn ghost');
+    b.onclick = () => e.ctc_annual ? reviseForm(e) : salaryForm(e); act.append(b); tr.append(act); st2.append(tr); });
+  $('pStruct').replaceChildren(st2);
+}
+$('pMonth').onchange = loadPayroll;
+async function pAct(path, body, ok) {
+  try { const r = await api(path, body); $('pMsg').textContent = ok(r); loadPayroll(); refreshCounts(); }
+  catch (e) { $('pMsg').textContent = e.message; }
+}
+$('pRun').onclick = () => pAct('/api/payroll/run', {month:$('pMonth').value}, r => `Computed ${r.employees} payslips, net ${inr(r.net)}.`);
+$('pSubmit').onclick = () => pAct('/api/payroll/submit', {month:$('pMonth').value}, () => 'Sent for approval.');
+$('pPaid').onclick = () => { const ref = prompt('Bank reference for the transfer'); if (ref) pAct('/api/payroll/paid', {month:$('pMonth').value, reference:ref}, r => `Recorded as paid (${r.reference}).`); };
+$('pNew').onclick = () => salaryForm(null);
+function formCard(title, fields, submit, label) {
+  const box = el('div', undefined, 'card'); const head = el('div', undefined, 'card-head'); const hd = el('div'); hd.append(el('h3', title));
+  const close = el('button', 'Close', 'btn ghost'); close.onclick = () => $('pDetail').replaceChildren(); head.append(hd, close);
+  const grid = el('div', undefined, 'grid2'); grid.style.marginTop = '12px';
+  const inputs = {}; fields.forEach(f => { const i = f.options ? el('select') : inp(f.type || 'text', f.ph);
+    if (f.options) f.options.forEach(o => { const op = el('option', o.label || o); op.value = o.value ?? o; i.append(op); });
+    if (f.value !== undefined) i.value = f.value; inputs[f.key] = i; grid.append(field(f.label, i)); });
+  const say = el('div', '', 'muted'); const go = el('button', label, 'btn primary');
+  go.onclick = async () => { try { const body = {}; Object.entries(inputs).forEach(([k, i]) => body[k] = i.value); await api(submit, body);
+      $('pDetail').replaceChildren(); loadPayroll(); refreshCounts(); } catch (e) { say.textContent = e.message; say.className = 'err'; } };
+  grid.append(go); box.append(head, grid, say); $('pDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function salaryForm(e) {
+  formCard(e ? `Set up salary for ${e.name}` : 'Set up a salary', [
+    {key:'employee', label:'Employee id', value:e ? e.id : '', ph:'E101'},
+    {key:'ctc_annual', label:'Annual CTC (₹)', type:'number', ph:'1200000'},
+    {key:'effective_from', label:'Effective from', type:'date'},
+    {key:'regime', label:'Tax regime', options:[{value:'new', label:'New'}, {value:'old', label:'Old'}]},
+    {key:'metro', label:'Metro city (HRA 50%)', options:[{value:'', label:'No'}, {value:'1', label:'Yes'}]},
+    {key:'pt_state', label:'State (professional tax)', options:['TN','KA','MH','NONE']},
+    {key:'pan', label:'PAN'}, {key:'uan', label:'UAN'}, {key:'bank_account', label:'Bank account'}, {key:'ifsc', label:'IFSC'},
+  ], '/api/payroll/salary', 'Save salary');
+}
+function reviseForm(e) {
+  formCard(`Revise ${e.name}'s salary`, [
+    {key:'employee', label:'Employee id', value:e.id},
+    {key:'pct', label:'Increase (%)', type:'number', ph:'10'},
+    {key:'new_ctc_annual', label:'or new annual CTC (₹)', type:'number'},
+    {key:'effective_from', label:'Effective from', type:'date'},
+    {key:'reason', label:'Reason', ph:'Annual appraisal'},
+  ], '/api/payroll/revision', 'Send for approval');
+}
+async function payslipFor(employeeId) {
+  const month = $('pMonth').value;
+  try { const r = await api(`/api/payroll/payslip/${employeeId}?month=${month}`);
+    const box = el('div', undefined, 'card'); const head = el('div', undefined, 'card-head'); const hd = el('div');
+    hd.append(el('h3', `${r.payslip.name} · ${monthLabel(month)}`), el('div', r.payslip.final ? 'Final' : 'Draft, not yet approved', 'sub'));
+    const close = el('button', 'Close', 'btn ghost'); close.onclick = () => $('pDetail').replaceChildren(); head.append(hd, close);
+    box.append(head, el('pre', r.text));
+    const adj = el('div', undefined, 'grid2'); adj.style.marginTop = '12px';
+    const kind = el('select'); ['bonus','incentive','reimbursement','arrears','recovery','lop_days'].forEach(k => { const o = el('option', k.replace('_', ' ')); o.value = k; kind.append(o); });
+    const amt = inp('number', 'Amount or days'); const note = inp('text', 'Note'); const add = el('button', 'Add to this month', 'btn');
+    const say = el('div', '', 'muted');
+    add.onclick = async () => { try { await api('/api/payroll/adjustment', {employee:employeeId, month, kind:kind.value, amount:amt.value, note:note.value});
+        await api('/api/payroll/run', {month}); loadPayroll(); payslipFor(employeeId); } catch (e) { say.textContent = e.message; say.className = 'err'; } };
+    adj.append(field('One-off item', kind), field('Amount', amt), field('Note', note), add);
+    box.append(adj, say); $('pDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
+  } catch (e) { $('pMsg').textContent = e.message; }
+}
+
+// ---------------------------------------------------------------- my pay
+async function loadMyPay() {
+  const month = monthOptions($('myMonth'));
+  const box = $('myBody');
+  try { const r = await api(`/api/payroll/mine?month=${month}`); box.replaceChildren(el('pre', r.text)); }
+  catch (e) { box.replaceChildren(el('div', e.message, 'empty')); }
+}
+$('myMonth').onchange = loadMyPay;
 
 // ---------------------------------------------------------------- approvals, tickets, budget, outbox
 async function loadApprovals() {

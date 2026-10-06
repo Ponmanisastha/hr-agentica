@@ -94,6 +94,8 @@ class Handler(BaseHTTPRequestHandler):
     def _get_api(self, path, user):
         if path.startswith("/api/hiring/"):
             return self._get_hiring(path)
+        if path.startswith("/api/payroll"):
+            return self._get_payroll(path)
         if path in ("/api/insights", "/api/insights/candidates.csv"):
             from urllib.parse import parse_qs, urlparse
             from . import insights
@@ -146,6 +148,62 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             return self._ok_or_error(T.run("candidate_timeline", candidate=m.group(1)))
         return self._send(404, {"error": "not found"})
+
+    def _get_payroll(self, path):
+        from urllib.parse import parse_qs, urlparse
+        from . import payroll
+        qs = parse_qs(urlparse(self.path).query)
+        month = qs.get("month", [""])[0]
+        if path == "/api/payroll/mine":
+            return self._ok_or_error(T.run("my_payslip", month=month))
+        auth.require("payroll:view")
+        if path == "/api/payroll":
+            try:
+                return self._send(200, {"summary": payroll.summary(month or ""), "structures": payroll.structures(),
+                                        "history": payroll.history(), "months": [r["month"] for r in
+                                        db.q("SELECT month FROM payroll_runs ORDER BY month DESC LIMIT 24")]})
+            except payroll.PayrollError as exc:
+                return self._send(400, {"error": str(exc)})
+        if path == "/api/payroll/bank.csv":
+            s = payroll.summary(month or "")
+            if s["status"] not in ("approved", "paid"):
+                return self._send(400, {"error": "The bank file is available once payroll is approved"})
+            return self._send(200, payroll.bank_file(month or ""), "text/csv; charset=utf-8",
+                              {"Content-Disposition": f'attachment; filename="bank-transfer-{s["month"]}.csv"'})
+        m = re.fullmatch(r"/api/payroll/payslip/([\w-]+)", path)
+        if m:
+            return self._ok_or_error(T.run("my_payslip", month=month, employee=m.group(1)))
+        return self._send(404, {"error": "not found"})
+
+    def _post_payroll(self, path, body):
+        month = body.get("month", "")
+        calls = {
+            "/api/payroll/run": lambda: T.run("run_payroll", month=month),
+            "/api/payroll/submit": lambda: T.run("submit_payroll", month=month),
+            "/api/payroll/paid": lambda: T.run("mark_payroll_paid", month=month, reference=body.get("reference", "")),
+            "/api/payroll/adjustment": lambda: T.run("add_pay_adjustment", employee=body.get("employee", ""), month=month,
+                                                     kind=body.get("kind", ""), amount=float(body.get("amount") or 0),
+                                                     note=body.get("note", "")),
+            "/api/payroll/salary": lambda: T.run("set_salary", employee=body.get("employee", ""),
+                                                 ctc_annual=float(body.get("ctc_annual") or 0),
+                                                 effective_from=body.get("effective_from", ""), metro=bool(body.get("metro")),
+                                                 regime=body.get("regime", "new"), pt_state=body.get("pt_state", ""),
+                                                 pan=body.get("pan", ""), uan=body.get("uan", ""),
+                                                 bank_account=body.get("bank_account", ""), ifsc=body.get("ifsc", "")),
+            "/api/payroll/details": lambda: T.run("update_salary_details", employee=body.get("employee", ""),
+                                                  pan=body.get("pan", ""), uan=body.get("uan", ""),
+                                                  bank_account=body.get("bank_account", ""), ifsc=body.get("ifsc", ""),
+                                                  pt_state=body.get("pt_state", ""), regime=body.get("regime", "")),
+            "/api/payroll/revision": lambda: T.run("propose_salary_revision", employee=body.get("employee", ""),
+                                                   new_ctc_annual=float(body.get("new_ctc_annual") or 0),
+                                                   pct=float(body.get("pct") or 0),
+                                                   effective_from=body.get("effective_from", ""), reason=body.get("reason", "")),
+            "/api/payroll/breakup": lambda: T.run("salary_breakup", ctc_annual=float(body.get("ctc_annual") or 0),
+                                                  metro=bool(body.get("metro"))),
+        }
+        if path not in calls:
+            return self._send(404, {"error": "not found"})
+        return self._ok_or_error(calls[path]())
 
     def _post_hiring(self, path, body):
         import base64
@@ -233,6 +291,8 @@ class Handler(BaseHTTPRequestHandler):
     def _post_api(self, path, body, user):
         if path.startswith("/api/hiring/"):
             return self._post_hiring(path, body)
+        if path.startswith("/api/payroll/"):
+            return self._post_payroll(path, body)
         if path == "/api/logout":
             auth.logout(self._token())
             return self._send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Max-Age=0; Path=/"})

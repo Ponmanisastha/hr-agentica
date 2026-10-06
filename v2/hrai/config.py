@@ -50,7 +50,7 @@ OLLAMA_BASE = env("OLLAMA_API_BASE", "http://localhost:11434")
 # Monthly budgets in USD per agent. Override with HRAI_BUDGET_<AGENT>=amount or `app.py budget set`.
 DEFAULT_BUDGETS = {
     "router": 1.0, "policy": 5.0, "leave": 5.0, "onboarding": 5.0,
-    "screening": 10.0, "recruitment": 5.0, "insights": 3.0, "memory": 1.0, "ticket": 15.0,
+    "screening": 10.0, "recruitment": 5.0, "insights": 3.0, "payroll": 5.0, "memory": 1.0, "ticket": 15.0,
 }
 TOTAL_BUDGET = float(env("HRAI_TOTAL_BUDGET", "40"))
 

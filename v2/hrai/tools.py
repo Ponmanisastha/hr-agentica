@@ -394,6 +394,15 @@ def decide_approval(approval_id, approve, note=""):
     if a["kind"] == "offer":
         from . import hiring
         hiring.on_offer_decision(int(a["ref"]), approve)
+    if a["kind"] == "salary_revision":
+        from . import payroll
+        payroll.on_revision_decision(int(a["ref"]), approve)
+    if a["kind"] == "payroll":
+        from . import payroll
+        if approve and a["requested_by"] == user.username:
+            db.x("UPDATE approvals SET status='pending' WHERE id=?", (approval_id,))
+            raise PermissionError("Payroll must be approved by someone other than the person who submitted it")
+        payroll.on_run_decision(a["ref"], approve, user.username)
     if a["kind"] == "leave":
         lr = db.q1("SELECT * FROM leave_requests WHERE id=?", (int(a["ref"]),))
         db.x("UPDATE leave_requests SET status=? WHERE id=?", (status, lr["id"]))
@@ -500,7 +509,8 @@ def hr_insights(section: str = "", job_id: str = "") -> dict:
     onboarding, ai, operations for that section's detail. job_id narrows hiring numbers to one job."""
     from . import insights
     fns = {"hiring": lambda: insights.hiring(job_id or None), "workforce": insights.workforce, "leave": insights.leave,
-           "onboarding": insights.onboarding, "ai": insights.ai_usage, "operations": insights.operations}
+           "onboarding": insights.onboarding, "ai": insights.ai_usage, "operations": insights.operations,
+           "payroll": insights.payroll_numbers}
     if section:
         if section not in fns:
             return {"error": f"Unknown section {section!r}; use one of {', '.join(fns)}"}
@@ -515,3 +525,113 @@ def needs_attention(limit: int = 10) -> dict:
     joiners with missing documents, budgets running out, fixes awaiting review."""
     from . import insights
     return {"items": insights.attention(limit)}
+
+
+# ---------------------------------------------------------------- salary and payroll
+
+def _pay(fn, *args, **kwargs):
+    from . import payroll
+    try:
+        return fn(payroll)(*args, **kwargs)
+    except payroll.PayrollError as exc:
+        return {"error": str(exc)}
+
+
+@hr_tool(HR_ROLES)
+def salary_breakup(ctc_annual: float, metro: bool = False) -> dict:
+    """Split an annual CTC into basic, HRA, special allowance, employer PF, ESI and gratuity, with monthly figures."""
+    return _pay(lambda p: p.breakup, ctc_annual, metro)
+
+
+@hr_tool(HR_ROLES)
+def compare_tax_regimes(ctc_annual: float, metro: bool = False, rent_annual: float = 0, invest_80c: float = 0,
+                        insurance_80d: float = 0) -> dict:
+    """Tax and take-home under the new and the old regime for a CTC, and which one costs less."""
+    return _pay(lambda p: p.compare_regimes, ctc_annual, metro,
+                {"rent_annual": rent_annual, "80C": invest_80c, "80D": insurance_80d})
+
+
+@hr_tool(HR_ROLES)
+def set_salary(employee: str, ctc_annual: float, effective_from: str = "", metro: bool = False, regime: str = "new",
+               pt_state: str = "", pan: str = "", uan: str = "", bank_account: str = "", ifsc: str = "") -> dict:
+    """Set up salary for an employee who has none yet. Later pay changes go through propose_salary_revision."""
+    return _pay(lambda p: p.set_structure, employee, ctc_annual, effective_from or None, metro, regime, pt_state,
+                pan, uan, bank_account, ifsc)
+
+
+@hr_tool(HR_ROLES)
+def update_salary_details(employee: str, pan: str = "", uan: str = "", bank_account: str = "", ifsc: str = "",
+                          pt_state: str = "", regime: str = "", rent_annual: float = 0, invest_80c: float = 0,
+                          insurance_80d: float = 0) -> dict:
+    """Update identifiers, the tax regime or tax-saving declarations on someone's current salary (no pay change)."""
+    decl = {k: v for k, v in (("rent_annual", rent_annual), ("80C", invest_80c), ("80D", insurance_80d)) if v}
+    return _pay(lambda p: p.update_details, employee, pan=pan, uan=uan, bank_account=bank_account, ifsc=ifsc,
+                pt_state=pt_state, regime=regime, **({"declarations": decl} if decl else {}))
+
+
+@hr_tool(HR_ROLES)
+def propose_salary_revision(employee: str, new_ctc_annual: float = 0, pct: float = 0, effective_from: str = "",
+                            reason: str = "") -> dict:
+    """Propose a salary revision (new CTC or a percentage). It waits for human approval before it takes effect."""
+    return _pay(lambda p: p.propose_revision, employee, new_ctc_annual or None, pct or None, effective_from or None, reason)
+
+
+@hr_tool(HR_ROLES)
+def add_pay_adjustment(employee: str, month: str, kind: str, amount: float, note: str = "") -> dict:
+    """One-off pay item for a month: bonus, incentive, reimbursement, arrears, recovery, or lop_days (unpaid days)."""
+    return _pay(lambda p: p.add_adjustment, employee, month, kind, amount, note)
+
+
+@hr_tool(HR_ROLES)
+def run_payroll(month: str = "") -> dict:
+    """Compute the draft payroll for a month (default this month): pay, PF, ESI, professional tax and TDS for everyone."""
+    return _pay(lambda p: p.run_payroll, month or "")
+
+
+@hr_tool(HR_ROLES)
+def payroll_summary(month: str = "") -> dict:
+    """Totals and per-employee net pay for a month's payroll, with its status and any warnings."""
+    return _pay(lambda p: p.summary, month or "")
+
+
+@hr_tool(HR_ROLES)
+def submit_payroll(month: str = "") -> dict:
+    """Send a draft payroll for approval. Someone else must approve it; nothing is paid automatically."""
+    return _pay(lambda p: p.submit, month or "")
+
+
+@hr_tool(HR_ROLES)
+def mark_payroll_paid(month: str, reference: str) -> dict:
+    """Record that an approved payroll was paid, with the bank reference. Do this after the bank confirms."""
+    return _pay(lambda p: p.mark_paid, month, reference)
+
+
+@hr_tool(ALL_ROLES)
+def my_payslip(month: str = "", employee: str = "") -> dict:
+    """A payslip. Employees and managers only ever see their own; HR and admins can pass another employee."""
+    from . import payroll
+    user = auth.current_user()
+    target = employee or user.employee_id
+    if user.role not in HR_ROLES:
+        if not user.employee_id:
+            return {"error": "Your login is not linked to an employee record"}
+        if employee and employee != user.employee_id:
+            return {"error": "You can only see your own payslip"}
+        target = user.employee_id
+    if not target:
+        return {"error": "Which employee?"}
+    try:
+        p = payroll.payslip(target, month or "")
+    except payroll.PayrollError as exc:
+        return {"error": str(exc)}
+    if not p:
+        return {"error": f"No payslip for {target} in {month or 'that month'}"}
+    if user.role not in HR_ROLES and not p["final"]:
+        return {"error": "That month's payroll is not approved yet"}
+    return {"payslip": p, "text": payroll.render_payslip(target, month or "")}
+
+
+@hr_tool(HR_ROLES)
+def salary_structures() -> dict:
+    """Every employee's current CTC, monthly gross, tax regime, missing details and any pending revision."""
+    return {"employees": _pay(lambda p: p.structures)}
