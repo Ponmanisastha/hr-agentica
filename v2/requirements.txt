@@ -1,0 +1,9 @@
+# Python 3.14 (tested on 3.14.6). Install inside a virtual environment: see setup_wsl.sh.
+langgraph>=1.2.13,<2                  # orchestrator and ticket workflow
+langgraph-checkpoint-sqlite>=3.1,<4   # durable ticket workflow (waits for human approval across restarts)
+langchain-core>=1.6,<2                # tool definitions shared by every agent
+litellm>=1.104,<2                     # AI gateway: Claude, Ollama and 100+ providers behind one API
+filelock<4                            # litellm needs filelock 3.x
+chromadb>=1.5,<2                      # local vector database (1.5+ is needed on Python 3.14)
+mcp>=2.3,<3                           # Model Context Protocol server
+bcrypt>=5,<6                          # password hashing

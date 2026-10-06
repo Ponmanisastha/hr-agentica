@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "hr-agentic": {
+      "command": "/home/YOU/hr-agentica/v2/.venv/bin/python",
+      "args": ["/home/YOU/hr-agentica/v2/app.py", "mcp"],
+      "env": {"HRAI_MCP_TOKEN": "paste a token from: python app.py token create admin"}
+    }
+  }
+}

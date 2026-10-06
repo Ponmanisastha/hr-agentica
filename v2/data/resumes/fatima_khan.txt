@@ -1,0 +1,8 @@
+Name: Fatima Khan
+Email: fatima.khan@example.com
+Years of experience: 3
+Summary: Backend developer for healthcare apps.
+Skills: Python, Flask, REST API, MySQL, SQL, AWS, Docker
+Experience:
+- 2023-2026 Backend Developer, MediTrack: REST API for patient records (HIPAA).
+Education: B.Tech Electronics and Communication

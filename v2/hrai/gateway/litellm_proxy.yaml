@@ -1,0 +1,22 @@
+# Optional: run the AI gateway as a separate LiteLLM proxy server (adds virtual keys, team budgets, rate limits,
+# caching and a spend dashboard). Untested in this build; the in-app gateway works without it.
+#   pip install 'litellm[proxy]'      (check it installs on your Python; the proxy has extra dependencies)
+#   export LITELLM_MASTER_KEY=sk-choose-one DATABASE_URL=postgresql://...   (the DB is needed for keys and budgets)
+#   litellm --config hrai/gateway/litellm_proxy.yaml --port 4000
+# Then in .env: HRAI_GATEWAY_URL=http://localhost:4000 and HRAI_GATEWAY_KEY=<a virtual key>.
+model_list:
+  - model_name: hr-smart
+    litellm_params: {model: anthropic/claude-sonnet-5-5, api_key: os.environ/ANTHROPIC_API_KEY}
+  - model_name: hr-fast
+    litellm_params: {model: anthropic/claude-haiku-4-5-20251001, api_key: os.environ/ANTHROPIC_API_KEY}
+  - model_name: hr-local
+    litellm_params: {model: ollama_chat/llama3.1:8b, api_base: http://localhost:11434}
+router_settings:
+  fallbacks: [{"hr-smart": ["hr-fast", "hr-local"]}, {"hr-fast": ["hr-local"]}]
+  num_retries: 2
+litellm_settings:
+  cache: true
+  cache_params: {type: local}
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL

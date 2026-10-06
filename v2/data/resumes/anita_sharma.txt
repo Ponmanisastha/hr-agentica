@@ -1,0 +1,9 @@
+Name: Anita Sharma
+Email: anita.sharma@example.com
+Years of experience: 5
+Summary: Backend engineer building payment APIs.
+Skills: Python, Django, REST API design, PostgreSQL, SQL, Docker, AWS (EC2, S3, Lambda)
+Experience:
+- 2022-2026 Senior Backend Engineer, PayFast: designed REST APIs serving 2M requests/day.
+- 2021-2022 Software Engineer, DataNest: SQL reporting pipelines.
+Education: B.Tech Computer Science, Anna University

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "E101",
+    "name": "Deepa Nair",
+    "manager": "Arun Kumar",
+    "leave_balance": {
+      "annual": 12,
+      "sick": 6,
+      "casual": 4
+    },
+    "email": "deepa.nair@example.com",
+    "manager_email": "arun.kumar@example.com",
+    "department": "Engineering",
+    "level": "L2"
+  },
+  {
+    "id": "E102",
+    "name": "Sanjay Patel",
+    "manager": "Arun Kumar",
+    "leave_balance": {
+      "annual": 2,
+      "sick": 5,
+      "casual": 1
+    },
+    "email": "sanjay.patel@example.com",
+    "manager_email": "arun.kumar@example.com",
+    "department": "Engineering",
+    "level": "L3"
+  },
+  {
+    "id": "E103",
+    "name": "Lakshmi Menon",
+    "manager": "Ravi Shankar",
+    "leave_balance": {
+      "annual": 18,
+      "sick": 8,
+      "casual": 3
+    },
+    "email": "lakshmi.menon@example.com",
+    "manager_email": "ravi.shankar@example.com",
+    "department": "Human Resources",
+    "level": "L4"
+  }
+]
