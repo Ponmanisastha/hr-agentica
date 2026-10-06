@@ -30,7 +30,8 @@ def own_documents():
     """The organisation's own policy files (README files in the folder are instructions, not policy)."""
     root = policy_dir()
     return sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED
-                  and p.stem.lower() != "readme" and not p.name.startswith((".", "~$")))
+                  and p.stem.lower() != "readme" and not p.name.startswith((".", "~$"))
+                  and not any(part.startswith(".") for part in p.relative_to(root).parts))  # .pending, .archive
 
 
 def documents():
@@ -113,6 +114,11 @@ def sections():
     return _memo["sections"]
 
 
+def forget():
+    """Drop the parsed sections so the next read parses the files again (after publishing a new version)."""
+    _memo["fingerprint"] = None
+
+
 def _read_sections():
     out, seen = [], set()
     for path in documents():
@@ -149,7 +155,7 @@ def fingerprint():
     h = hashlib.sha256(str(policy_dir()).encode())
     for p in documents():
         st = p.stat()
-        h.update(f"{p}:{st.st_size}:{int(st.st_mtime)}".encode())
+        h.update(f"{p}:{st.st_size}:{st.st_mtime_ns}".encode())
     return h.hexdigest()[:16]
 
 
@@ -157,6 +163,23 @@ def summary():
     by_doc = {}
     for s in sections():
         by_doc.setdefault(s["meta"]["source"], []).append(s["meta"]["section"])
-    from . import kag
-    return {"folder": str(policy_dir()), "using_sample": not own_documents(),
-            "documents": [{"name": k, "sections": v} for k, v in by_doc.items()], "rules": kag.rules()}
+    from . import kag, versions
+    docs = []
+    for name, secs in by_doc.items():
+        v = versions.active(name)
+        docs.append({"name": name, "sections": secs, "version": v["version"] if v else None,
+                     "live_since": v["activated_at"] if v else None,
+                     "versions": [{k: h[k] for k in ("id", "version", "status", "uploaded_by", "uploaded_at",
+                                                     "decided_by", "activated_at", "note")}
+                                  for h in versions.history(name)] if v else []})
+    return {"folder": str(policy_dir()), "using_sample": not own_documents(), "documents": docs,
+            "pending": versions.pending(), "rules": kag.rules(),
+            "retired": retired()}
+
+
+def retired():
+    """Documents taken out of use; their versions stay in the archive and can be restored."""
+    from .. import db
+    live = {str(p.relative_to(policy_dir())) for p in own_documents()}
+    rows = db.q("SELECT name, MAX(version) AS version FROM policy_versions WHERE status='retired' GROUP BY name")
+    return [r for r in rows if r["name"] not in live]

@@ -212,7 +212,9 @@ class PolicyWebTests(unittest.TestCase):
         doc = {"name": "Acme leave policy.txt", "content_b64": base64.b64encode(OWN_POLICY.encode()).decode()}
         self.assertEqual(self.call("/api/policies/upload", emp, {"files": [doc]})[0], 403)
         code, out = self.call("/api/policies/upload", hr, {"files": [doc]})
-        self.assertEqual((code, out["indexed_sections"], out["using_sample"]), (200, 3, False))
+        self.assertEqual((code, out["staged"][0]["status"], out["using_sample"]), (200, "pending", True))  # not live yet
+        code, out = self.call("/api/policies/decide", hr, {"id": out["staged"][0]["id"], "approve": True})
+        self.assertEqual((code, out["decided"]["status"], out["using_sample"]), (200, "active", False))
         code, out = self.call("/api/policies", emp)                               # everyone can see the sources
         self.assertEqual(out["documents"][0]["name"], "Acme leave policy.txt")
         code, out = self.call("/api/policies/upload", hr, {"files": [{"name": "evil.exe", "content_b64": ""}]})

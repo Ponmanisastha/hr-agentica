@@ -15,7 +15,9 @@
   python app.py payroll run|show|submit|paid REF|slip E101 [--month 2026-10]     salary and payroll
   python app.py culture [summary] | calendar | kudos | awards | pulse    events, recognition and pulse
   python app.py insights [--job JOB-101] | attention | report | csv     HR analytics; csv prints the pipeline
-  python app.py policies [list] | add FILE... | reindex    your HR policy documents (policies/ folder)
+  python app.py policies [list] | add FILE... | pending | approve ID | reject ID | history NAME
+                     | rollback NAME VERSION | remove NAME | reindex     versioned HR policy documents
+  python app.py documents [OWNER] | add OWNER TYPE FILE | verify ID | reject ID [--note TEXT]   employee documents
   python app.py samples [load]             load the sample pack: policies, resumes, employees, leave, salaries
   python app.py knowledge rag|cag|kag "<question>" | kag rules | mag USER    see what each knowledge layer returns
   python app.py index                      rebuild vectors and the knowledge graph
@@ -347,24 +349,85 @@ def main(argv):
         from hrai.knowledge import vectors
         print(vectors.index_all(), automations.reindex_policies())
     elif cmd == "policies":
-        import shutil
         from pathlib import Path
         from hrai import automations
-        from hrai.knowledge import policies
+        from hrai.knowledge import policies, versions
         sub = args[0] if args else "list"
-        if sub == "add":
-            for f in args[1:]:
-                shutil.copy2(f, policies.policy_dir() / Path(f).name)
-                print("added", Path(f).name)
-            print(automations.reindex_policies())
-        elif sub == "reindex":
-            print(automations.reindex_policies())
-        s_ = policies.summary()
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "add":  # staged as a new version; publish with `policies approve ID`
+                for f in args[1:]:
+                    v = versions.stage(Path(f).name, Path(f).read_bytes())
+                    print(v["message"])
+                    for c in v.get("conflicts", []):
+                        print(f"   ! {c.get('rule') or 'Topic'}: {c.get('here', c['section'])} here, "
+                              f"{c.get('other_value', 'also covered')} in {c['other']}")
+                    if v["status"] == "pending":
+                        print(f"   Approve: python app.py policies approve {v['id']}   Reject: python app.py policies reject {v['id']}")
+                return
+            if sub == "pending":
+                for v in versions.pending():
+                    print(f"#{v['id']}  {v['name']} version {v['version']}, uploaded by {v['uploaded_by']} at {v['uploaded_at']}")
+                    for r in v["changes"].get("rule_changes", []):
+                        print(f"     rule: {r['rule']}: {r['before']} -> {r['after']}")
+                    for c in v["conflicts"]:
+                        print(f"     ! {c.get('rule') or 'overlaps'} {c['other']}")
+                return
+            if sub in ("approve", "reject"):
+                v = versions.decide(int(args[1]), sub == "approve", a.note)
+                print(f"{v['name']} version {v['version']}: {v['status']}")
+                return
+            if sub == "history":
+                for v in versions.history(" ".join(args[1:])):
+                    print(f"  v{v['version']:<3} {v['status']:<10} {v['activated_at'] or v['uploaded_at']}  {v['uploaded_by']}  {v['note'] or ''}")
+                return
+            if sub == "rollback":
+                v = versions.rollback(" ".join(args[1:-1]), int(args[-1]))
+                print(f"{v['name']}: version {v['version']} is live again")
+                return
+            if sub == "remove":
+                r = versions.retire(" ".join(args[1:]))
+                print(f"{r['name']} retired (version {r['retired_version']} kept in the archive; restore it with: policies rollback \"{r['name']}\" {r['retired_version']})")
+                return
+            if sub == "reindex":
+                print(automations.reindex_policies())
+            s_ = policies.summary()
+        finally:
+            auth._current.reset(token)
         print(f"Policy folder: {s_['folder']}" + ("  (empty, so the sample handbook is used)" if s_["using_sample"] else ""))
         for d in s_["documents"]:
-            print(f"  {d['name']}: {len(d['sections'])} sections")
+            ver = f", version {d['version']}" if d["version"] else ""
+            print(f"  {d['name']}: {len(d['sections'])} sections{ver}")
             for sec in d["sections"]:
                 print(f"     - {sec}")
+        if s_["pending"]:
+            print(f"Waiting for approval: {len(s_['pending'])} (python app.py policies pending)")
+    elif cmd == "documents":
+        from pathlib import Path
+        from hrai import documents
+        token = auth.set_current_user(cli_user())
+        try:
+            if args[:1] == ["add"]:  # documents add NH-201 pan_card scan.pdf
+                d = documents.save(args[1], args[2], Path(args[3]).name, Path(args[3]).read_bytes(), a.note)
+                print(f"Saved {d['file_name']} as {d['label']} for {d['owner_id']} ({documents.root() / d['path']})")
+            elif args[:1] in (["verify"], ["reject"]):
+                d = documents.review(int(args[1]), "verified" if args[0] == "verify" else "rejected", a.note)
+                print(f"#{d['id']} {d['file_name']}: {d['status']}")
+            elif args:
+                c = documents.checklist(args[0])
+                print(f"{c['name']} ({c['owner_id']})" + (f": missing {', '.join(c['missing'])}" if c["missing"] else ""))
+                for i in c["items"]:
+                    files = ", ".join(f"#{f['id']} {f['file_name']} ({f['status']})" for f in i["files"])
+                    print(f"  {i['label']:<38} {i['status']:<9} {files}")
+            else:
+                p_ = documents.people()
+                print(f"Folder: {documents.root()}   waiting for review: {p_['to_review']}")
+                for h in p_["new_hires"]:
+                    print(f"  {h['id']}  {h['name']:<20} joins {h['start_date']}  missing {h['missing']}")
+                for e in p_["employees"]:
+                    print(f"  {e['id']}  {e['name']:<20} {e['files']} file(s)")
+        finally:
+            auth._current.reset(token)
     elif cmd == "knowledge":
         from hrai.knowledge import cag, kag, mag, vectors
         sub, q = (args[0] if args else ""), " ".join(args[1:])

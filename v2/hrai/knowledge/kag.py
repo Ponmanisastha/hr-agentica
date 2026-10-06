@@ -67,18 +67,33 @@ def build():
         for s in json.loads(j["nice_to_have"]):
             add(j["id"], "prefers_skill", s, "jobs")
         add(j["id"], "min_years", j["min_years"], "jobs")
-    from . import policies
-    found = set()
-    for sec in policies.sections():
+    from . import policies, versions
+    secs = policies.sections()
+    order = {name: i for i, name in enumerate(dict.fromkeys(s["meta"]["source"] for s in secs))}
+    live = versions.activation_times()
+    found = {}
+    for subj, pred, value, doc, title in extract(secs):
+        # the same rule in two documents: the most recently approved document wins, then the first by name
+        rank = (live.get(doc, ""), -order[doc])
+        if (subj, pred) not in found or rank > found[(subj, pred)][0]:
+            found[(subj, pred)] = (rank, value, doc, title)
+    for (subj, pred), (_, value, doc, title) in found.items():
+        add(subj, pred, value, f"{versions.cite(doc)}, section {title}")
+    return db.q1("SELECT COUNT(*) AS n FROM kg_triples")["n"]
+
+
+def extract(sections):
+    """Every rule phrase in these sections, in document order: [(subject, predicate, value, document, section)]."""
+    out = []
+    for sec in sections:
         title = sec["meta"]["section"]
         text = re.sub(r"\s+", " ", sec["text"])  # PDF and Word text breaks lines mid-sentence
         for subj, pred, pattern, word in RULE_PATTERNS:
-            if (subj, pred) not in found and word in title.lower():
+            if word in title.lower():
                 m = re.search(pattern, text)
                 if m:
-                    found.add((subj, pred))
-                    add(subj, pred, m.group(1).replace(",", ""), f"{sec['meta']['source']}, section {title}")
-    return db.q1("SELECT COUNT(*) AS n FROM kg_triples")["n"]
+                    out.append((subj, pred, m.group(1).replace(",", ""), sec["meta"]["source"], title))
+    return out
 
 
 def rule(subject, predicate):

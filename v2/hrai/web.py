@@ -31,7 +31,7 @@ class Handler(BaseHTTPRequestHandler):
     # ---------------------------------------------------------------- plumbing
 
     def _send(self, code, body, ctype="application/json", headers=None):
-        data = (body if isinstance(body, str) else json.dumps(body, default=str)).encode()
+        data = body if isinstance(body, bytes) else (body if isinstance(body, str) else json.dumps(body, default=str)).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
@@ -57,7 +57,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length", 0))
-        if n > (MAX_UPLOAD_BODY if self.path.startswith(("/api/hiring/upload", "/api/policies/upload")) else MAX_BODY):
+        if n > (MAX_UPLOAD_BODY if self.path.startswith(("/api/hiring/upload", "/api/policies/upload",
+                                                         "/api/documents/upload")) else MAX_BODY):
             raise ValueError("Request body too large")
         if n and "application/json" not in self.headers.get("Content-Type", ""):
             raise ValueError("POST bodies must be application/json")
@@ -88,6 +89,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._get_api(path, user)
         except PermissionError as exc:
             return self._send(403, {"error": str(exc)})
+        except ValueError as exc:
+            return self._send(400, {"error": str(exc)})
         finally:
             auth._current.reset(reset)
 
@@ -103,6 +106,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/policies":
             from .knowledge import policies
             return self._send(200, policies.summary())
+        if path.startswith("/api/documents"):
+            return self._get_documents(path, user)
         if path in ("/api/insights", "/api/insights/candidates.csv"):
             from urllib.parse import parse_qs, urlparse
             from . import insights
@@ -256,30 +261,71 @@ class Handler(BaseHTTPRequestHandler):
         return self._ok_or_error(calls[path]())
 
     def _post_policies(self, path, body):
-        """HR adds, removes or re-indexes policy documents; answers use them as soon as this returns."""
+        """HR uploads policy documents as new versions, approves or rejects them, rolls back, or retires a document.
+        An upload changes nothing until it is approved; then answers use it straight away. (PolicyError is a
+        ValueError, so problems come back as a 400 with the reason.)"""
         import base64
         from . import automations
-        from .knowledge import policies
+        from .knowledge import policies, versions
         auth.require("policies:manage")
-        folder = policies.policy_dir()
+        out = {}
         if path == "/api/policies/upload":
+            staged = []
             for f in body.get("files", [])[:20]:
-                name = re.sub(r"[^\w.\- ]", "_", f.get("name", ""))[:120].strip()
-                if not name or "." + name.rsplit(".", 1)[-1].lower() not in policies.SUPPORTED:
-                    raise ValueError(f"Unsupported file {f.get('name')!r}: use .pdf, .docx, .txt or .md")
                 data = base64.b64decode(f.get("content_b64", ""), validate=True)
                 if len(data) > MAX_FILE:
-                    raise ValueError(f"{name} is larger than 5 MB")
-                (folder / name).write_bytes(data)
+                    raise ValueError(f"{f.get('name')} is larger than 5 MB")
+                staged.append(versions.stage(f.get("name", ""), data))
+            out["staged"] = staged
+        elif path == "/api/policies/decide":
+            out["decided"] = versions.decide(int(body.get("id") or 0), bool(body.get("approve")), body.get("note", ""))
+        elif path == "/api/policies/rollback":
+            out["rolled_back"] = versions.rollback(body.get("name", ""), int(body.get("version") or 0))
         elif path == "/api/policies/delete":
-            name = body.get("name", "")
-            target = (folder / name).resolve()
-            if folder.resolve() not in target.parents or not target.is_file():
-                raise ValueError(f"No policy document {name!r}")
-            target.unlink()
-        out = automations.reindex_policies()
-        db.audit(auth.current_user().username, "policies." + path.rsplit("/", 1)[1], {"sections": out["policy_sections"]})
-        return self._send(200, {**policies.summary(), "indexed_sections": out["policy_sections"]})
+            out["retired"] = versions.retire(body.get("name", ""))
+        elif path == "/api/policies/reindex":
+            out["indexed_sections"] = automations.reindex_policies()["policy_sections"]
+        else:
+            return self._send(404, {"error": "not found"})
+        return self._send(200, {**policies.summary(), **out})
+
+    def _get_documents(self, path, user):
+        from urllib.parse import parse_qs, urlparse
+        from . import documents
+        m = re.fullmatch(r"/api/documents/file/(\d+)", path)
+        if m:
+            d, data = documents.file_of(int(m.group(1)))
+            ctype = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                     ".txt": "text/plain; charset=utf-8"}.get(("." + d["file_name"].rsplit(".", 1)[-1]).lower(),
+                                                              "application/octet-stream")
+            safe = re.sub(r'[^\w.\- ]', "_", d["file_name"])
+            return self._send(200, data, ctype, {"Content-Disposition": f'attachment; filename="{safe}"'})
+        if path == "/api/documents/checklist":
+            owner = parse_qs(urlparse(self.path).query).get("owner", [""])[0]
+            return self._send(200, documents.checklist(owner or user.employee_id or ""))
+        if path == "/api/documents":
+            if user.can("documents:manage"):
+                return self._send(200, {**documents.people(), "types": {"new_hire": documents.NEW_HIRE_TYPES,
+                                                                        "employee": documents.EMPLOYEE_TYPES}})
+            if not user.employee_id:
+                return self._send(200, {"items": [], "note": "Your login is not linked to an employee record"})
+            return self._send(200, documents.checklist(user.employee_id))
+        return self._send(404, {"error": "not found"})
+
+    def _post_documents(self, path, body):
+        import base64
+        from . import documents
+        if path == "/api/documents/upload":
+            owner = body.get("owner_id") or auth.current_user().employee_id or ""
+            saved = []
+            for f in body.get("files", [])[:10]:
+                data = base64.b64decode(f.get("content_b64", ""), validate=True)
+                saved.append(documents.save(owner, body.get("doc_type", ""), f.get("name", ""), data, body.get("note", "")))
+            return self._send(200, {"saved": saved, **documents.checklist(owner)})
+        if path == "/api/documents/review":
+            d = documents.review(int(body.get("id") or 0), body.get("status", ""), body.get("note", ""))
+            return self._send(200, {"reviewed": d, **documents.checklist(d["owner_id"])})
+        return self._send(404, {"error": "not found"})
 
     def _post_projects(self, path, body):
         calls = {
@@ -435,8 +481,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._post_projects(path, body)
         if path.startswith("/api/culture/"):
             return self._post_culture(path, body)
-        if path in ("/api/policies/upload", "/api/policies/reindex", "/api/policies/delete"):
+        if path.startswith("/api/policies/"):
             return self._post_policies(path, body)
+        if path.startswith("/api/documents/"):
+            return self._post_documents(path, body)
         if path == "/api/logout":
             auth.logout(self._token())
             return self._send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Max-Age=0; Path=/"})

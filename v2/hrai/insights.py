@@ -280,10 +280,15 @@ def attention(limit=12):
         add(2, f"Record the {i['round']} result for {i['name']} (was on {i['scheduled_at'][:10]})", "hiring",
             i["candidate_id"], "warning")
     soon = (today + timedelta(days=7)).isoformat()
-    for h in db.q("SELECT id, name, start_date FROM new_hires WHERE start_date BETWEEN ? AND ?", (t, soon)):
-        blocked = db.q1("SELECT COUNT(*) AS n FROM onboarding_tasks WHERE hire_id=? AND status LIKE 'blocked%'", (h["id"],))
-        if blocked and blocked["n"]:
-            add(1, f"{h['name']} joins on {h['start_date']} with documents still missing", "ask", h["id"], "critical")
+    from .documents import NEW_HIRE_TYPES
+    for h in db.q("SELECT id, name, start_date, documents FROM new_hires WHERE start_date BETWEEN ? AND ?", (t, soon)):
+        missing = [d for d in NEW_HIRE_TYPES if d not in json.loads(h["documents"] or "[]")]
+        if missing:
+            add(1, f"{h['name']} joins on {h['start_date']} with {len(missing)} document(s) still missing", "documents",
+                h["id"], "critical")
+    waiting = db.q1("SELECT COUNT(*) AS n FROM documents WHERE status='received'")["n"]
+    if waiting:
+        add(3, f"{waiting} uploaded document(s) waiting for HR to check", "documents", "", "info")
     try:
         from . import payroll
         m = config.today().strftime("%Y-%m")

@@ -68,7 +68,9 @@ def reindex_knowledge():
 
 def reindex_policies():
     """Re-embed the policy documents and rebuild the leave rules from them; returns what was indexed."""
-    from .knowledge import kag, policies, vectors
+    from .knowledge import kag, policies, vectors, versions
+    policies.forget()
+    versions.sync()  # files copied into the folder or removed from it become versions too
     out = {"policy_sections": vectors.index_policies(), "kg_triples": kag.build(), "fingerprint": policies.fingerprint()}
     (config.home() / "policy_fingerprint").write_text(out["fingerprint"])
     return out
