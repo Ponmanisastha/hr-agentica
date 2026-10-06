@@ -43,6 +43,22 @@ def recall_node(state: State):
 
 def keyword_route(text):
     t = text.lower()
+    if re.search(r"\bevent|celebrat|festival|diwali|town ?hall|offsite|party|rsvp|kudos|appreciat|award|nominat|"
+                 r"birthday|anniversar|pulse|survey|engagement|culture|lunch|what is coming up|whats coming up|"
+                 r"coming up this (month|week)|\bplan a\b|\borganis\w+ a\b|\borganiz\w+ a\b", t):
+        return "culture"
+    if re.search(r"project|allocat|staff(ing|ed)?\b|bench|capacity|utilisation|utilization|timesheet|milestone|"
+                 r"who is free|roll(ing)? off|\bfte\b|what is slipping|slipping|\btasks?\b|\bput\b .* \bon\b", t):
+        return "projects"
+    if re.search(r"payslip|pay ?slip|payroll|salary|\bctc\b|\bpf\b|\besi\b|professional tax|\btds\b|take[- ]home|"
+                 r"tax regime|hike|increment|appraisal|bonus|in-?hand|gratuity", t):
+        return "payroll"
+    if re.search(r"insight|analytic|dashboard|metric|kpi|trend|funnel|time to (hire|offer|join)|acceptance rate|"
+                 r"pass rate|headcount|needs? (my )?attention|how is hiring|statistics|\bstats\b", t):
+        return "insights"
+    if re.search(r"inbox|folder|pipeline|interview|\bround\b|\bl\d+\b|\bhr round|final round|offer|joining date|joined|"
+                 r"follow[- ]?ups?|hiring status|candidate status|cleared|ingest", t):
+        return "recruitment"
     if re.search(r"resume|\bcv\b|candidate|screen|shortlist|applicant", t):
         return "screening"
     if re.search(r"onboard|new hire|joining|joiner|nh-\d", t):

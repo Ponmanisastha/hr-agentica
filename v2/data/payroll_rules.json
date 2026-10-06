@@ -1,0 +1,37 @@
+{
+  "_note": "Indian payroll rules used by hrai/payroll.py. Check them with your CA or payroll provider at the start of every financial year and edit here; no code change needed. Amounts in rupees.",
+  "financial_year": "2026-27",
+  "structure": {
+    "basic_pct_of_ctc": 50,
+    "hra_pct_of_basic_metro": 50,
+    "hra_pct_of_basic_non_metro": 40,
+    "gratuity_pct_of_basic": 4.81,
+    "include_gratuity_in_ctc": true
+  },
+  "pf": {"rate_pct": 12, "wage_ceiling_monthly": 15000, "cap_at_ceiling": true},
+  "esi": {"employee_pct": 0.75, "employer_pct": 3.25, "gross_ceiling_monthly": 21000},
+  "professional_tax": {
+    "default_state": "TN",
+    "_how": "monthly: list of [gross monthly from, tax per month]; february_extra adds to February. half_yearly: [half-year gross from, tax per half year], deducted in equal monthly parts.",
+    "TN": {"half_yearly": [[0, 0], [21001, 180], [30001, 430], [45001, 930], [60001, 1025], [75001, 1250]]},
+    "KA": {"monthly": [[0, 0], [25000, 200]], "february_extra": 100},
+    "MH": {"monthly": [[0, 0], [7501, 175], [10001, 200]], "february_extra": 100},
+    "NONE": {"monthly": [[0, 0]]}
+  },
+  "income_tax": {
+    "cess_pct": 4,
+    "new": {
+      "standard_deduction": 75000,
+      "slabs": [[0, 0], [400000, 5], [800000, 10], [1200000, 15], [1600000, 20], [2000000, 25], [2400000, 30]],
+      "rebate_87a": {"income_up_to": 1200000, "max_rebate": 60000, "marginal_relief": true},
+      "surcharge": [[5000000, 10], [10000000, 15], [20000000, 25]]
+    },
+    "old": {
+      "standard_deduction": 50000,
+      "slabs": [[0, 0], [250000, 5], [500000, 20], [1000000, 30]],
+      "rebate_87a": {"income_up_to": 500000, "max_rebate": 12500, "marginal_relief": false},
+      "surcharge": [[5000000, 10], [10000000, 15], [20000000, 25], [50000000, 37]],
+      "limits": {"80C": 150000, "80D": 25000, "80D_senior": 50000}
+    }
+  }
+}

@@ -150,7 +150,11 @@ def save_shortlist(job_id: str, decisions: list[dict], notes: str = "") -> dict:
         c = db.q1("SELECT * FROM candidates WHERE id=?", (d["candidate_id"],))
         if not c:
             return {"error": f"No candidate {d['candidate_id']}"}
-        db.x("UPDATE candidates SET decision=?, updated_at=? WHERE id=?", (d["decision"], db.now(), c["id"]))
+        stage = "selected" if d["decision"] == "shortlist" else "rejected"
+        db.x("UPDATE candidates SET decision=?, stage=?, status_note=?, updated_at=? WHERE id=?",
+             (d["decision"], stage, d.get("reason", ""), db.now(), c["id"]))
+        db.x("INSERT INTO candidate_events (candidate_id, ts, actor, event, detail) VALUES (?,?,?,?,?)",
+             (c["id"], db.now(), auth.current_user().username, f"screened_{stage}", d.get("reason", "")))
         lines.append(f"| {c['name']} | {c['score']} | {d['decision']} | {d.get('reason', '')} |")
     if notes:
         lines += ["", "## Notes", "", notes]
@@ -387,6 +391,21 @@ def decide_approval(approval_id, approve, note=""):
         raise ValueError("No pending approval with that id")
     status = "approved" if approve else "rejected"
     db.x("UPDATE approvals SET status=?, decided_by=?, decided_at=? WHERE id=?", (status, user.username, db.now(), approval_id))
+    if a["kind"] == "offer":
+        from . import hiring
+        hiring.on_offer_decision(int(a["ref"]), approve)
+    if a["kind"] == "event_budget":
+        from . import engage
+        engage.on_budget_decision(a["ref"], approve)
+    if a["kind"] == "salary_revision":
+        from . import payroll
+        payroll.on_revision_decision(int(a["ref"]), approve)
+    if a["kind"] == "payroll":
+        from . import payroll
+        if approve and a["requested_by"] == user.username:
+            db.x("UPDATE approvals SET status='pending' WHERE id=?", (approval_id,))
+            raise PermissionError("Payroll must be approved by someone other than the person who submitted it")
+        payroll.on_run_decision(a["ref"], approve, user.username)
     if a["kind"] == "leave":
         lr = db.q1("SELECT * FROM leave_requests WHERE id=?", (int(a["ref"]),))
         db.x("UPDATE leave_requests SET status=? WHERE id=?", (status, lr["id"]))
@@ -394,3 +413,480 @@ def decide_approval(approval_id, approve, note=""):
             db.x(f"UPDATE employees SET {lr['leave_type']} = {lr['leave_type']} - ? WHERE id=?", (lr["working_days"], lr["employee_id"]))
     db.audit(user.username, f"approval.{status}", {"id": approval_id, "note": note})
     return {"approval_id": approval_id, "status": status}
+
+
+# ---------------------------------------------------------------- hiring pipeline
+
+def _hiring(fn, *args, **kwargs):
+    from . import hiring
+    try:
+        return fn(hiring)(*args, **kwargs)
+    except hiring.HiringError as exc:
+        return {"error": str(exc)}
+
+
+@hr_tool(HR_ROLES)
+def ingest_resumes(job_id: str = "") -> dict:
+    """Read new resume files from the inbox folder (inbox/<JOB-ID>/), screen them and sort them into selected,
+    on_hold or rejected. Returns what was added, duplicates and unreadable files."""
+    return _hiring(lambda h: h.ingest, job_id=job_id or None)
+
+
+@hr_tool(HR_ROLES)
+def pipeline_summary(job_id: str = "") -> dict:
+    """Counts of candidates per stage and per interview round, plus follow-ups due today."""
+    from . import hiring
+    return {"summary": hiring.summary(job_id or None), "board": hiring.board(job_id or None)}
+
+
+@hr_tool(HR_ROLES)
+def candidate_timeline(candidate: str) -> dict:
+    """Everything about one candidate (id like C-007 or a name): stage, rounds, interviews, offer, follow-ups, history."""
+    return _hiring(lambda h: h.timeline, candidate)
+
+
+@hr_tool(HR_ROLES)
+def move_candidate(candidate: str, stage: str, note: str = "") -> dict:
+    """Move a candidate to a stage (selected, on_hold, rejected, withdrawn, ...) with a note. HR override."""
+    return _hiring(lambda h: h.move, candidate, stage, note)
+
+
+@hr_tool(HR_ROLES)
+def schedule_interview(candidate: str, round_name: str = "", when: str = "", interviewer: str = "",
+                       mode: str = "Video call") -> dict:
+    """Schedule an interview round (L1, L2, HR, Final...; default the next round) at `when` (YYYY-MM-DDTHH:MM).
+    Drafts the invite email and a reminder follow-up."""
+    return _hiring(lambda h: h.schedule, candidate, round_name or None, when or None, interviewer, mode)
+
+
+@hr_tool(HR_ROLES)
+def record_interview_result(candidate: str, round_name: str, result: str, rating: int = 0, feedback: str = "") -> dict:
+    """Record a round's result: pass (moves to the next round, or to offer after the last), fail (rejected, regret
+    email drafted) or hold. rating 1-5, 0 for none."""
+    return _hiring(lambda h: h.record_result, candidate, round_name, result, rating or None, feedback)
+
+
+@hr_tool(HR_ROLES)
+def make_offer(candidate: str, ctc_lpa: float, joining_date: str) -> dict:
+    """Request an offer (CTC in lakh per annum, joining date YYYY-MM-DD). Goes to the approvals queue first."""
+    return _hiring(lambda h: h.make_offer, candidate, ctc_lpa, joining_date)
+
+
+@hr_tool(HR_ROLES)
+def record_offer_response(candidate: str, accepted: bool, joining_date: str = "") -> dict:
+    """Record whether the candidate accepted the offer. Accepting creates the new hire, starts onboarding and
+    schedules pre-joining and post-joining follow-ups."""
+    return _hiring(lambda h: h.offer_response, candidate, accepted, joining_date or None)
+
+
+@hr_tool(HR_ROLES)
+def mark_joined(candidate: str) -> dict:
+    """Mark that an accepted candidate has joined."""
+    return _hiring(lambda h: h.mark_joined, candidate)
+
+
+@hr_tool(HR_ROLES)
+def list_followups(days_ahead: int = 7) -> dict:
+    """Open hiring follow-ups due within `days_ahead` days (overdue ones included)."""
+    from . import hiring
+    return {"followups": hiring.followups(days_ahead)}
+
+
+@hr_tool(HR_ROLES)
+def complete_followup(followup_id: int, note: str = "") -> dict:
+    """Mark a follow-up done."""
+    return _hiring(lambda h: h.complete_followup, followup_id, note)
+
+
+@hr_tool(HR_ROLES)
+def set_interview_rounds(job_id: str, rounds: list[str]) -> dict:
+    """Set a job's interview rounds in order, e.g. ["L1", "L2", "L3", "HR", "Final"]."""
+    return {"job_id": job_id, "rounds": _hiring(lambda h: h.set_rounds, job_id, rounds)}
+
+
+# ---------------------------------------------------------------- insights
+
+@hr_tool(HR_ROLES)
+def hr_insights(section: str = "", job_id: str = "") -> dict:
+    """HR analytics. section: '' for a plain-language snapshot plus key numbers, or one of hiring, workforce, leave,
+    onboarding, ai, operations for that section's detail. job_id narrows hiring numbers to one job."""
+    from . import insights
+    fns = {"hiring": lambda: insights.hiring(job_id or None), "workforce": insights.workforce, "leave": insights.leave,
+           "onboarding": insights.onboarding, "ai": insights.ai_usage, "operations": insights.operations,
+           "payroll": insights.payroll_numbers, "projects": insights.projects_numbers,
+           "culture": insights.culture_numbers}
+    if section:
+        if section not in fns:
+            return {"error": f"Unknown section {section!r}; use one of {', '.join(fns)}"}
+        return {section: fns[section]()}
+    data = insights.overview(job_id or None)
+    return {"summary": insights.narrate(data), "kpis": data["kpis"]}
+
+
+@hr_tool(HR_ROLES)
+def needs_attention(limit: int = 10) -> dict:
+    """What needs HR today, most urgent first: overdue follow-ups, approvals, unscheduled interviews, missing results,
+    joiners with missing documents, budgets running out, fixes awaiting review."""
+    from . import insights
+    return {"items": insights.attention(limit)}
+
+
+# ---------------------------------------------------------------- salary and payroll
+
+def _pay(fn, *args, **kwargs):
+    from . import payroll
+    try:
+        return fn(payroll)(*args, **kwargs)
+    except payroll.PayrollError as exc:
+        return {"error": str(exc)}
+
+
+@hr_tool(HR_ROLES)
+def salary_breakup(ctc_annual: float, metro: bool = False) -> dict:
+    """Split an annual CTC into basic, HRA, special allowance, employer PF, ESI and gratuity, with monthly figures."""
+    return _pay(lambda p: p.breakup, ctc_annual, metro)
+
+
+@hr_tool(HR_ROLES)
+def compare_tax_regimes(ctc_annual: float, metro: bool = False, rent_annual: float = 0, invest_80c: float = 0,
+                        insurance_80d: float = 0) -> dict:
+    """Tax and take-home under the new and the old regime for a CTC, and which one costs less."""
+    return _pay(lambda p: p.compare_regimes, ctc_annual, metro,
+                {"rent_annual": rent_annual, "80C": invest_80c, "80D": insurance_80d})
+
+
+@hr_tool(HR_ROLES)
+def set_salary(employee: str, ctc_annual: float, effective_from: str = "", metro: bool = False, regime: str = "new",
+               pt_state: str = "", pan: str = "", uan: str = "", bank_account: str = "", ifsc: str = "") -> dict:
+    """Set up salary for an employee who has none yet. Later pay changes go through propose_salary_revision."""
+    return _pay(lambda p: p.set_structure, employee, ctc_annual, effective_from or None, metro, regime, pt_state,
+                pan, uan, bank_account, ifsc)
+
+
+@hr_tool(HR_ROLES)
+def update_salary_details(employee: str, pan: str = "", uan: str = "", bank_account: str = "", ifsc: str = "",
+                          pt_state: str = "", regime: str = "", rent_annual: float = 0, invest_80c: float = 0,
+                          insurance_80d: float = 0) -> dict:
+    """Update identifiers, the tax regime or tax-saving declarations on someone's current salary (no pay change)."""
+    decl = {k: v for k, v in (("rent_annual", rent_annual), ("80C", invest_80c), ("80D", insurance_80d)) if v}
+    return _pay(lambda p: p.update_details, employee, pan=pan, uan=uan, bank_account=bank_account, ifsc=ifsc,
+                pt_state=pt_state, regime=regime, **({"declarations": decl} if decl else {}))
+
+
+@hr_tool(HR_ROLES)
+def propose_salary_revision(employee: str, new_ctc_annual: float = 0, pct: float = 0, effective_from: str = "",
+                            reason: str = "") -> dict:
+    """Propose a salary revision (new CTC or a percentage). It waits for human approval before it takes effect."""
+    return _pay(lambda p: p.propose_revision, employee, new_ctc_annual or None, pct or None, effective_from or None, reason)
+
+
+@hr_tool(HR_ROLES)
+def add_pay_adjustment(employee: str, month: str, kind: str, amount: float, note: str = "") -> dict:
+    """One-off pay item for a month: bonus, incentive, reimbursement, arrears, recovery, or lop_days (unpaid days)."""
+    return _pay(lambda p: p.add_adjustment, employee, month, kind, amount, note)
+
+
+@hr_tool(HR_ROLES)
+def run_payroll(month: str = "") -> dict:
+    """Compute the draft payroll for a month (default this month): pay, PF, ESI, professional tax and TDS for everyone."""
+    return _pay(lambda p: p.run_payroll, month or "")
+
+
+@hr_tool(HR_ROLES)
+def payroll_summary(month: str = "") -> dict:
+    """Totals and per-employee net pay for a month's payroll, with its status and any warnings."""
+    return _pay(lambda p: p.summary, month or "")
+
+
+@hr_tool(HR_ROLES)
+def submit_payroll(month: str = "") -> dict:
+    """Send a draft payroll for approval. Someone else must approve it; nothing is paid automatically."""
+    return _pay(lambda p: p.submit, month or "")
+
+
+@hr_tool(HR_ROLES)
+def mark_payroll_paid(month: str, reference: str) -> dict:
+    """Record that an approved payroll was paid, with the bank reference. Do this after the bank confirms."""
+    return _pay(lambda p: p.mark_paid, month, reference)
+
+
+@hr_tool(ALL_ROLES)
+def my_payslip(month: str = "", employee: str = "") -> dict:
+    """A payslip. Employees and managers only ever see their own; HR and admins can pass another employee."""
+    from . import payroll
+    user = auth.current_user()
+    target = employee or user.employee_id
+    if user.role not in HR_ROLES:
+        if not user.employee_id:
+            return {"error": "Your login is not linked to an employee record"}
+        if employee and employee != user.employee_id:
+            return {"error": "You can only see your own payslip"}
+        target = user.employee_id
+    if not target:
+        return {"error": "Which employee?"}
+    try:
+        p = payroll.payslip(target, month or "")
+    except payroll.PayrollError as exc:
+        return {"error": str(exc)}
+    if not p:
+        return {"error": f"No payslip for {target} in {month or 'that month'}"}
+    if user.role not in HR_ROLES and not p["final"]:
+        return {"error": "That month's payroll is not approved yet"}
+    return {"payslip": p, "text": payroll.render_payslip(target, month or "")}
+
+
+@hr_tool(HR_ROLES)
+def salary_structures() -> dict:
+    """Every employee's current CTC, monthly gross, tax regime, missing details and any pending revision."""
+    return {"employees": _pay(lambda p: p.structures)}
+
+
+# ---------------------------------------------------------------- projects and staffing
+
+def _proj(fn, *args, **kwargs):
+    from . import projects
+    try:
+        return fn(projects)(*args, **kwargs)
+    except projects.ProjectError as exc:
+        return {"error": str(exc)}
+
+
+MANAGER_ROLES = {"admin", "hr", "manager", "service"}
+
+
+@hr_tool(MANAGER_ROLES)
+def project_board(status: str = "") -> dict:
+    """Every project with its team size, FTE, open and overdue tasks, hours this month and days left."""
+    return {"projects": _proj(lambda p: p.board, status or None)}
+
+
+@hr_tool(MANAGER_ROLES)
+def project_details(project: str) -> dict:
+    """One project: its team, tasks, staffing gaps and recent history."""
+    from . import projects
+    try:
+        p = projects.get(project)
+        return {"project": p, "team": projects.team(p["id"]), "tasks": projects.tasks(p["id"], open_only=False),
+                "staffing": projects.staffing_gap(p["id"]),
+                "events": db.q("SELECT ts, actor, event, detail FROM project_events WHERE project_id=? ORDER BY id DESC "
+                               "LIMIT 20", (p["id"],))}
+    except projects.ProjectError as exc:
+        return {"error": str(exc)}
+
+
+@hr_tool(MANAGER_ROLES)
+def create_project(project_name: str, client: str = "", manager: str = "", start_date: str = "", end_date: str = "",
+                   skills: list[str] = None, notes: str = "") -> dict:
+    """Start a project. skills are the ones it needs, used for staffing suggestions and gaps."""
+    return _proj(lambda p: p.create, project_name, client, manager, start_date or None, end_date or None, skills or [],
+                 notes=notes)
+
+
+@hr_tool(MANAGER_ROLES)
+def update_project(project: str, status: str = "", health: str = "", manager: str = "", end_date: str = "",
+                   notes: str = "") -> dict:
+    """Change a project's status (planned, active, on_hold, done, cancelled), health, manager, end date or notes."""
+    return _proj(lambda p: p.update, project, status=status, health=health, manager=manager, end_date=end_date,
+                 notes=notes)
+
+
+@hr_tool(MANAGER_ROLES)
+def allocate_person(employee: str, project: str, percent: float = 100, role: str = "", start_date: str = "",
+                    end_date: str = "") -> dict:
+    """Put someone on a project for a share of their time. Refuses to take anyone past 100%."""
+    return _proj(lambda p: p.allocate, employee, project, percent, role, start_date or None, end_date or None)
+
+
+@hr_tool(MANAGER_ROLES)
+def release_person(allocation_id: int, end_date: str = "", note: str = "") -> dict:
+    """End someone's allocation to a project (today by default)."""
+    return _proj(lambda p: p.release, allocation_id, end_date or None, note)
+
+
+@hr_tool(MANAGER_ROLES)
+def team_capacity(weeks: int = 4, free_only: bool = False) -> dict:
+    """Who is booked how much over the next few weeks, who is free, who is over 100%, and approved leave in that time."""
+    from . import projects
+    rows = projects.bench(weeks) if free_only else projects.capacity(weeks)
+    return {"weeks": weeks, "utilisation": projects.utilisation(weeks), "people": rows}
+
+
+@hr_tool(MANAGER_ROLES)
+def project_risks() -> dict:
+    """What needs a manager's attention across projects: overdue tasks, unstaffed projects, over-allocation,
+    skill gaps and people rolling off soon."""
+    return {"risks": _proj(lambda p: p.risks)}
+
+
+@hr_tool(MANAGER_ROLES)
+def add_project_task(project: str, title: str, owner: str = "", due: str = "", kind: str = "task",
+                     estimate_hours: float = 0) -> dict:
+    """Add a task or milestone to a project (kind: task or milestone)."""
+    return _proj(lambda p: p.add_task, project, title, owner, due or None, "todo", kind, estimate_hours)
+
+
+@hr_tool(MANAGER_ROLES)
+def update_project_task(task_id: int, status: str = "", owner: str = "", due: str = "", note: str = "") -> dict:
+    """Change a task: status (todo, in_progress, blocked, done), owner, due date or note."""
+    return _proj(lambda p: p.set_task, task_id, status or None, owner or None, due or None, note)
+
+
+@hr_tool(MANAGER_ROLES)
+def project_tasks(project: str = "", owner: str = "", include_done: bool = False) -> dict:
+    """Open tasks across projects, or for one project or owner, with overdue ones flagged."""
+    return {"tasks": _proj(lambda p: p.tasks, project or None, owner or None, not include_done)}
+
+
+@hr_tool(ALL_ROLES)
+def my_projects(employee: str = "") -> dict:
+    """Which projects someone is on and how much of their time. Employees only ever see their own."""
+    from . import projects
+    user = auth.current_user()
+    target = employee or user.employee_id
+    if user.role not in MANAGER_ROLES:
+        if not user.employee_id:
+            return {"error": "Your login is not linked to an employee record"}
+        if employee and employee != user.employee_id:
+            return {"error": "You can only see your own projects"}
+        target = user.employee_id
+    if not target:
+        return {"error": "Which employee?"}
+    return _proj(lambda p: p.assignments, target)
+
+
+@hr_tool(ALL_ROLES)
+def log_project_hours(project: str, day: str, hours: float, employee: str = "", note: str = "") -> dict:
+    """Log hours on a project for a day. Employees can only log their own."""
+    user = auth.current_user()
+    target = employee or user.employee_id
+    if user.role not in MANAGER_ROLES:
+        if employee and employee != user.employee_id:
+            return {"error": "You can only log your own hours"}
+        target = user.employee_id
+    if not target:
+        return {"error": "Which employee? Your login is not linked to an employee record"}
+    return _proj(lambda p: p.log_hours, target, project, day, hours, note)
+
+
+@hr_tool(MANAGER_ROLES)
+def project_timesheet(project: str = "", employee: str = "", days: int = 7) -> dict:
+    """Hours logged over the last few days, by project and by person."""
+    return _proj(lambda p: p.timesheet, employee or None, project or None, days)
+
+
+# ---------------------------------------------------------------- culture: events, recognition, pulse
+
+def _eng(fn, *args, **kwargs):
+    from . import engage
+    try:
+        return fn(engage)(*args, **kwargs)
+    except engage.EngageError as exc:
+        return {"error": str(exc)}
+
+
+@hr_tool(ALL_ROLES)
+def events_calendar(days_ahead: int = 60) -> dict:
+    """What is coming up: events, public holidays, birthdays and work anniversaries."""
+    return {"calendar": _eng(lambda e: e.calendar, days_ahead)}
+
+
+@hr_tool(ALL_ROLES)
+def event_details(event: str) -> dict:
+    """One event with who has said yes, no or maybe."""
+    return _eng(lambda e: e.event_details, event)
+
+
+@hr_tool(HR_ROLES)
+def create_event(title: str, day: str, kind: str = "celebration", location: str = "", organiser: str = "",
+                 budget: float = 0, description: str = "", start_time: str = "") -> dict:
+    """Plan an event (festival, town_hall, offsite, training, volunteering, celebration, sports, other).
+    A budget past the limit goes to approval before the event can be announced."""
+    return _eng(lambda e: e.create_event, title, day, kind, location, organiser, budget, description,
+                start_time=start_time)
+
+
+@hr_tool(HR_ROLES)
+def update_event(event: str, status: str = "", day: str = "", location: str = "", spent: float = 0,
+                 description: str = "") -> dict:
+    """Change an event: status (planned, announced, done, cancelled), date, location, spend or description."""
+    return _eng(lambda e: e.update_event, event, status=status, day=day, location=location,
+                spent=spent or None, description=description)
+
+
+@hr_tool(HR_ROLES)
+def announce_event(event: str) -> dict:
+    """Draft the invitation for the whole company and mark the event announced. The email waits in the outbox."""
+    return _eng(lambda e: e.announce, event)
+
+
+@hr_tool(ALL_ROLES)
+def rsvp_event(event: str, answer: str, guests: int = 0, note: str = "", employee: str = "") -> dict:
+    """Answer an invitation: yes, no or maybe. Employees answer for themselves."""
+    user = auth.current_user()
+    if user.role not in HR_ROLES and employee and employee != user.employee_id:
+        return {"error": "You can only answer for yourself"}
+    return _eng(lambda e: e.rsvp, event, answer, employee if user.role in HR_ROLES else "", guests, note)
+
+
+@hr_tool(ALL_ROLES)
+def give_kudos(to: str, message: str, value: str = "") -> dict:
+    """Thank a colleague publicly for something they did."""
+    return _eng(lambda e: e.give_kudos, to, message, "", value)
+
+
+@hr_tool(ALL_ROLES)
+def kudos_wall(days: int = 90, employee: str = "") -> dict:
+    """Recent kudos across the company, and who has been thanked most."""
+    return _eng(lambda e: e.kudos_wall, days, employee)
+
+
+@hr_tool(ALL_ROLES)
+def nominate_for_award(award: str, employee: str, reason: str, cycle: str = "") -> dict:
+    """Nominate someone for an award. HR decides the result; nothing is awarded automatically."""
+    return _eng(lambda e: e.nominate, award, employee, reason, cycle)
+
+
+@hr_tool(HR_ROLES)
+def decide_award(nomination_id: int, status: str, note: str = "") -> dict:
+    """Move a nomination to shortlisted, awarded or declined. An award drafts a congratulations email."""
+    return _eng(lambda e: e.decide_award, nomination_id, status, note)
+
+
+@hr_tool(ALL_ROLES)
+def list_awards(cycle: str = "", status: str = "") -> dict:
+    """Award nominations and winners."""
+    return {"awards": _eng(lambda e: e.awards, cycle, status)}
+
+
+@hr_tool(HR_ROLES)
+def start_pulse_survey(title: str, question: str, scale_max: int = 5, closes: str = "") -> dict:
+    """Start a one-question pulse survey. Answers are anonymous and results appear once three people have answered."""
+    return _eng(lambda e: e.start_survey, title, question, scale_max, closes or None)
+
+
+@hr_tool(ALL_ROLES)
+def answer_pulse_survey(survey_id: int, score: int, comment: str = "") -> dict:
+    """Answer a pulse survey. Your identity is stored only as a hash, so answers cannot be traced back to you."""
+    return _eng(lambda e: e.answer_survey, survey_id, score, comment)
+
+
+@hr_tool(ALL_ROLES)
+def pulse_results(survey_id: int = 0) -> dict:
+    """Results of a pulse survey, or the list of open ones."""
+    from . import engage
+    if not survey_id:
+        return {"surveys": engage.surveys(True)}
+    return _eng(lambda e: e.survey_results, survey_id)
+
+
+@hr_tool(HR_ROLES)
+def close_pulse_survey(survey_id: int) -> dict:
+    """Close a survey and return its results."""
+    return _eng(lambda e: e.close_survey, survey_id)
+
+
+@hr_tool(HR_ROLES)
+def engagement_report() -> dict:
+    """Culture in numbers: events and attendance, spend against budget, kudos, awards and pulse scores."""
+    from . import engage
+    return {"summary": engage.summary(), "engagement": engage.engagement()}

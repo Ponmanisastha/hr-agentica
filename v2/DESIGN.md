@@ -134,7 +134,110 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 - The server binds to 127.0.0.1 unless `HRAI_HOST` is set. Secrets live in `.env`, which git ignores.
 - No email is ever sent. Leave exceptions, code fixes and knowledge additions all need a human decision.
 
-## 9. Phases
+## 9. Hiring pipeline (added in the HR suite, phase 1)
+
+`hrai/hiring.py`, the **recruitment agent**, 12 tools, the Hiring tab and three triggers.
+
+- **Inbox.** `inbox/<JOB-ID>/` takes .pdf (pypdf), .docx (read directly from the file's XML), .txt and .md. A file
+  is read once (SHA-256 of its bytes); a second resume with the same email for the same job is reported as a duplicate.
+  Name, email, phone, years and skills are pulled out with rules.
+- **Screening.** rejected = misses a must-have or the minimum years; selected = score at or above the job's
+  threshold (default 70); on hold = meets the minimum but scores lower, so HR decides. A copy of the file goes to
+  `sorted/<stage>/`.
+- **Rounds.** Each job stores its own ordered list of rounds (L1..Ln, HR, Final). Passing a round moves the candidate
+  to the next one; passing the last makes them ready for an offer. Fail rejects them (a regret email is drafted); hold
+  parks them.
+- **Offer and joining.** An offer request goes to the approvals queue; the offer email is drafted only after
+  approval. Acceptance creates the new hire, which starts the onboarding plan through the `new_hire.created` trigger,
+  and adds follow-ups at -7, -3, 0, +30 and +90 days from joining.
+- **Tracking.** `candidate_events` is each candidate's timeline; `followups` holds what is due.
+- **Triggers.** `inbox_watch` (every 2 minutes), `hiring_followups` (08:30: HR digest and next-day interview
+  reminders), `stale_candidates` (10:00: anyone stuck 5+ days gets a follow-up).
+
+## 10. Insights and the console redesign (HR suite, phase 2)
+
+`hrai/insights.py` computes every number from SQLite on request (no stale cache): the hiring funnel (candidates who
+*reached* each step), per-round pass rate (passed / decided) and average rating, average days from application to
+offer, acceptance and joining, offer acceptance (accepted / answered), missing must-have skills among rejected
+resumes, headcount, joiners by month, leave by type, onboarding progress, AI spend per day, per agent and per tier,
+and tickets and feedback.
+
+- **Insights agent** (fast tier, `hr_insights` and `needs_attention` tools, `hr-insights` skill). It answers with tool
+  numbers only. The router sends analytics questions to it; leave-policy questions still go to the policy agent.
+- **Needs attention** is the UX agent behind the dashboard: concrete next steps, most urgent first, each naming the
+  page (and candidate or ticket) to act on. Actions also close follow-ups they make moot: recording a round closes its
+  reminder, scheduling a round closes "schedule next round", requesting an offer closes "prepare the offer", and
+  rejection or withdrawal closes the rest.
+- **Console.** Sidebar navigation, a Ctrl K ask bar on every page, a light and a dark theme (system by default), a
+  phone layout, and charts drawn in plain HTML/SVG with no chart library or CDN, so it works offline. Charts follow
+  one validated palette (colour-blind checked in both themes), keep values readable without hover, and each has a
+  table view. Status colours always come with an icon and a word.
+- **Export.** `/api/insights/candidates.csv` (HR and admin only); cells that start with `=`, `+`, `-` or `@` are
+  prefixed so resume text cannot run as a spreadsheet formula.
+
+## 11. Salary and payroll (HR suite, phase 3)
+
+`hrai/payroll.py` with the rates in `data/payroll_rules.json` (not in code, because they change every financial year).
+
+- **Structure.** Basic 50% of CTC, HRA 50% of basic in a metro and 40% elsewhere, special allowance the rest.
+  Employer PF, employer ESI and gratuity sit inside CTC. ESI applies only while monthly gross is at or under ₹21,000.
+- **TDS.** Project the year's income from what has been paid so far plus the months left, compute the annual tax (new
+  regime by default; old regime takes 80C including PF, 80D, HRA exemption and professional tax), subtract TDS already
+  deducted, and spread the rest. No PAN means at least 20%. When a month is processed before earlier months of the
+  same financial year exist in the system, the payslip says so.
+- **Two approvals.** A salary revision waits for approval before it takes effect; a payroll run is submitted, and
+  whoever submitted it cannot approve it (checked in `decide_approval`). Approval writes the payslips and
+  `var/payroll/<month>/bank_transfer.csv` and drafts the payslip emails; HR pays through the bank and then records
+  the reference. A submitted month is locked against edits; an approved or paid month cannot be recomputed.
+- **Privacy.** `my_payslip` gives employees and managers only their own payslip, and only once approved. PAN, UAN and
+  bank account are masked everywhere. The bank file and payroll summary need `payroll:view` (HR and admin).
+- **Agent.** The payroll agent answers breakup, regime-comparison, run, submit, revision and payslip requests, and the
+  router sends salary wording to it. The dashboard and the needs-attention list pick up payroll state too.
+
+## 12. Projects and staffing (HR suite, phase 4)
+
+`hrai/projects.py`, the **projects agent**, 14 tools, the Projects page and a daily `project_health` trigger.
+
+- **Allocation** is a percent of someone's time between two dates. Overlapping allocations are added up, and
+  `allocate` refuses anything that would pass 100%, saying how much is actually free. Releasing sets an end date and
+  keeps the history, so capacity stays truthful.
+- **Capacity** looks four weeks ahead and subtracts approved leave. The bench is anyone at or under 50%.
+  Utilisation is the average across everyone.
+- **Tasks and milestones** carry a status, owner and due date; overdue is past due and not done. Timesheets record
+  hours per person per project per day (16 hours a day maximum, nothing in the future).
+- **Risks** is the staffing version of needs-attention: overdue tasks, an active project with nobody on it, a project
+  ending with work open, someone over 100%, a skill nobody on the project has (with free people who do), and people
+  rolling off in the next two weeks. These also appear on the HR dashboard.
+- **Skills** now live on employees (`employees.skills`) and on projects, which is what drives staffing suggestions
+  and gaps; a gap with nobody free to fill it is a hiring signal, next to the hiring funnel on the same dashboard.
+- Employees see and log only their own; staffing changes need `projects:manage` (admin, HR, manager).
+
+## 13. Culture, recognition and HR activities (HR suite, phase 5)
+
+`hrai/engage.py`, the **culture agent**, 16 tools, the Culture page and two triggers (`culture_calendar` in the
+morning, `event_wrap_up` in the evening).
+
+- **Events** carry a kind, a day, a venue, an audience, a budget and spend. A budget over
+  `HRAI_EVENT_BUDGET_LIMIT` (₹25,000 by default) opens an `event_budget` approval, and `announce` refuses until a
+  human decides, so no event is announced on money nobody agreed to. Spend past 110% of the budget is refused too:
+  raise the budget, which goes through approval again.
+- **Announcing** drafts the all-hands invitation into the outbox and marks the event announced. As everywhere else in
+  the app, nothing is emailed by itself.
+- **RSVPs** are one row per person per event (yes, no, maybe, plus guests), upserted so changing your mind is normal.
+  Attendance counts heads including guests, and the response rate uses headcount.
+- **The calendar** merges events, public holidays and occasions. Occasions are birthdays and work anniversaries
+  computed from `employees.date_of_birth` and `joined_on` against the year the date next falls in (29 February lands
+  on 1 March), so no second table needs maintaining.
+- **Recognition** has two levels: kudos, which anyone can give to anyone but themselves and which cost nothing, and
+  awards, which anyone can nominate for but only HR decides; an award drafts a congratulations email.
+- **Pulse surveys** are one question on a 2-10 scale. Answers store a SHA-256 hash of the person and the survey
+  instead of their id, which stops a second answer without recording who answered, and results stay hidden until
+  three people have answered so a single answer cannot be picked out.
+- **Engagement numbers** (events, attendance, spend against budget, kudos reach, award states, pulse averages) feed
+  the HR dashboard: upcoming events and kudos become KPIs, and an event within a week that nobody has announced, or
+  an occasion in the next three days, becomes an attention item.
+
+## 14. Phases
 
 | Phase | Content | Status |
 | --- | --- | --- |
@@ -143,12 +246,17 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 | 3 | LangGraph orchestrator, LangChain tools, screening crew, hooks, skills | Done |
 | 4 | MCP server, A2A, triggers, web console | Done |
 | 5 | Ticket tracker and auto-fix agent with PRs and human approval | Done |
-| 6 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Next |
-| 7 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
+| 6 | Hiring pipeline: resume inbox, screening, L1..Ln/HR/Final rounds, offers, joining, follow-ups | Done (HR suite phase 1) |
+| 7 | Insights and analytics dashboard; UI redesign | Done (HR suite phase 2) |
+| 8 | Salary management: CTC breakup, PF, ESI, professional tax, TDS, payslips, payroll approvals | Done (HR suite phase 3) |
+| 9 | Project management: projects, allocations, capacity and the bench, tasks, timesheets | Done (HR suite phase 4) |
+| 10 | Cultural events and HR activities: events and budgets, RSVPs, kudos, awards, pulse surveys | Done (HR suite phase 5) |
+| 11 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Later |
+| 12 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
 
-## 10. What was tested, and what was not
+## 15. What was tested, and what was not
 
-**Tested (28 automated tests on Python 3.14.6, offline):**
+**Tested (82 automated tests on Python 3.14.6, offline):**
 - Login, hashing, lockout and roles
 - All four agents in rules-only mode
 - The LLM tool loop with a scripted model response
@@ -160,9 +268,25 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 - Web login and permissions
 - MCP tools filtered by role
 - Triggers
+- The hiring pipeline: .pdf, .docx and .txt resumes, sorting, duplicates, a five-round journey to offer approval,
+  joining and follow-ups, fail and hold, the web upload, and the triggers
+- Insights: funnel, rounds, missing skills, the attention list and its ordering, moot follow-ups closing, the
+  insights agent and routing, the daily report, the dashboard API and CSV (including role checks and formula escaping)
+- Payroll: CTC breakup (metro and not, with and without ESI), professional tax by state, 87A rebate, surcharge,
+  no-PAN TDS, HRA exemption, LOP and one-off items, run to submit to approve to paid (including the submitter being
+  refused), TDS spread across months, revisions behind approval, payslip privacy and the web API
+- Projects: the 100% allocation rule, releasing, capacity with approved leave, the bench, staffing gaps and
+  suggestions, task status and overdue, timesheet limits, risks, the agent in rules mode, role checks and the API
+- Culture: a budget over the limit waiting for a human before anything is announced, runaway spend refused, RSVP
+  changes and counts, the calendar with holidays and occasions, kudos (including to yourself), awards needing HR, a
+  pulse survey staying hidden until three answers and refusing a second answer from the same person, role checks,
+  the triggers and the API
 - The full ticket workflow (gap → patch → worktree tests → review → approve → merge → closed, plus the reject and needs-human paths) in a repo where the app sits in a subfolder
 
 **Also checked by hand:** the MCP server over stdio with a real MCP client, the CrewAI wiring on Python 3.13 (crew assembly and tools, with the model call mocked), and MiniLM semantic search.
+
+The payroll figures follow the rules in `data/payroll_rules.json` and were checked against worked examples, but they
+have not been reviewed by a tax professional; confirm them with your CA before the first live run.
 
 **Not tested here:**
 - Live Claude calls, because there was no API key in the build environment.

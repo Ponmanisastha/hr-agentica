@@ -17,6 +17,8 @@ from .ops import ticket_agent, tracker
 
 PAGE = config.ROOT / "web" / "index.html"
 MAX_BODY = 1_000_000
+MAX_UPLOAD_BODY = 30_000_000  # resume uploads (base64 JSON)
+MAX_FILE = 5_000_000
 COOKIE = "hrai_session"
 
 
@@ -55,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length", 0))
-        if n > MAX_BODY:
+        if n > (MAX_UPLOAD_BODY if self.path.startswith("/api/hiring/upload") else MAX_BODY):
             raise ValueError("Request body too large")
         if n and "application/json" not in self.headers.get("Content-Type", ""):
             raise ValueError("POST bodies must be application/json")
@@ -90,6 +92,23 @@ class Handler(BaseHTTPRequestHandler):
             auth._current.reset(reset)
 
     def _get_api(self, path, user):
+        if path.startswith("/api/hiring/"):
+            return self._get_hiring(path)
+        if path.startswith("/api/payroll"):
+            return self._get_payroll(path)
+        if path.startswith("/api/projects"):
+            return self._get_projects(path)
+        if path.startswith("/api/culture"):
+            return self._get_culture(path)
+        if path in ("/api/insights", "/api/insights/candidates.csv"):
+            from urllib.parse import parse_qs, urlparse
+            from . import insights
+            auth.require("insights:view")
+            job = parse_qs(urlparse(self.path).query).get("job", [""])[0] or None
+            if path.endswith(".csv"):
+                return self._send(200, insights.candidates_csv(job), "text/csv; charset=utf-8",
+                                  {"Content-Disposition": f'attachment; filename="candidates-{config.today()}.csv"'})
+            return self._send(200, insights.overview(job))
         if path == "/api/me":
             return self._send(200, {"username": user.username, "role": user.role, "employee_id": user.employee_id})
         if path == "/api/approvals":
@@ -118,6 +137,231 @@ class Handler(BaseHTTPRequestHandler):
                                     "recent_runs": db.q("SELECT * FROM trigger_runs ORDER BY id DESC LIMIT 20")})
         return self._send(404, {"error": "not found"})
 
+    def _ok_or_error(self, out):
+        return self._send(400 if isinstance(out, dict) and "error" in out else 200, out)
+
+    def _get_hiring(self, path):
+        from urllib.parse import parse_qs, urlparse
+        qs = parse_qs(urlparse(self.path).query)
+        if path == "/api/hiring/board":
+            out = T.run("pipeline_summary", job_id=qs.get("job", [""])[0])
+            return self._ok_or_error(out)
+        if path == "/api/hiring/followups":
+            return self._ok_or_error(T.run("list_followups", days_ahead=int(qs.get("days", ["14"])[0])))
+        m = re.fullmatch(r"/api/hiring/candidates/([\w-]+)", path)
+        if m:
+            return self._ok_or_error(T.run("candidate_timeline", candidate=m.group(1)))
+        return self._send(404, {"error": "not found"})
+
+    def _get_payroll(self, path):
+        from urllib.parse import parse_qs, urlparse
+        from . import payroll
+        qs = parse_qs(urlparse(self.path).query)
+        month = qs.get("month", [""])[0]
+        if path == "/api/payroll/mine":
+            return self._ok_or_error(T.run("my_payslip", month=month))
+        auth.require("payroll:view")
+        if path == "/api/payroll":
+            try:
+                return self._send(200, {"summary": payroll.summary(month or ""), "structures": payroll.structures(),
+                                        "history": payroll.history(), "months": [r["month"] for r in
+                                        db.q("SELECT month FROM payroll_runs ORDER BY month DESC LIMIT 24")]})
+            except payroll.PayrollError as exc:
+                return self._send(400, {"error": str(exc)})
+        if path == "/api/payroll/bank.csv":
+            s = payroll.summary(month or "")
+            if s["status"] not in ("approved", "paid"):
+                return self._send(400, {"error": "The bank file is available once payroll is approved"})
+            return self._send(200, payroll.bank_file(month or ""), "text/csv; charset=utf-8",
+                              {"Content-Disposition": f'attachment; filename="bank-transfer-{s["month"]}.csv"'})
+        m = re.fullmatch(r"/api/payroll/payslip/([\w-]+)", path)
+        if m:
+            return self._ok_or_error(T.run("my_payslip", month=month, employee=m.group(1)))
+        return self._send(404, {"error": "not found"})
+
+    def _get_projects(self, path):
+        from urllib.parse import parse_qs, urlparse
+        qs = parse_qs(urlparse(self.path).query)
+        if path == "/api/projects":
+            out = T.run("project_board", status=qs.get("status", [""])[0])
+            if "error" in out:
+                return self._send(403, out)
+            return self._send(200, {**out, "capacity": T.run("team_capacity", weeks=int(qs.get("weeks", ["4"])[0])),
+                                    "risks": T.run("project_risks")["risks"],
+                                    "tasks": T.run("project_tasks")["tasks"],
+                                    "timesheet": T.run("project_timesheet", days=7)})
+        if path == "/api/projects/mine":
+            return self._ok_or_error(T.run("my_projects"))
+        m = re.fullmatch(r"/api/projects/([\w-]+)", path)
+        if m:
+            return self._ok_or_error(T.run("project_details", project=m.group(1)))
+        return self._send(404, {"error": "not found"})
+
+    def _get_culture(self, path):
+        from urllib.parse import parse_qs, urlparse
+        qs = parse_qs(urlparse(self.path).query)
+        if path == "/api/culture":
+            out = {"calendar": T.run("events_calendar", days_ahead=int(qs.get("days", ["60"])[0]))["calendar"],
+                   "kudos": T.run("kudos_wall"), "awards": T.run("list_awards")["awards"],
+                   "surveys": T.run("pulse_results")["surveys"]}
+            report = T.run("engagement_report")
+            if "error" not in report:
+                out["engagement"] = report["engagement"]
+            return self._send(200, out)
+        m = re.fullmatch(r"/api/culture/events/([\w-]+)", path)
+        if m:
+            return self._ok_or_error(T.run("event_details", event=m.group(1)))
+        m = re.fullmatch(r"/api/culture/surveys/(\d+)", path)
+        if m:
+            return self._ok_or_error(T.run("pulse_results", survey_id=int(m.group(1))))
+        return self._send(404, {"error": "not found"})
+
+    def _post_culture(self, path, body):
+        calls = {
+            "/api/culture/events": lambda: T.run("create_event", title=body.get("title", ""), day=body.get("day", ""),
+                                                 kind=body.get("kind", "celebration"), location=body.get("location", ""),
+                                                 organiser=body.get("organiser", ""), budget=float(body.get("budget") or 0),
+                                                 description=body.get("description", ""),
+                                                 start_time=body.get("start_time", "")),
+            "/api/culture/events/update": lambda: T.run("update_event", event=body.get("event", ""),
+                                                        status=body.get("status", ""), day=body.get("day", ""),
+                                                        location=body.get("location", ""),
+                                                        spent=float(body.get("spent") or 0),
+                                                        description=body.get("description", "")),
+            "/api/culture/events/announce": lambda: T.run("announce_event", event=body.get("event", "")),
+            "/api/culture/rsvp": lambda: T.run("rsvp_event", event=body.get("event", ""), answer=body.get("answer", ""),
+                                               guests=int(body.get("guests") or 0), note=body.get("note", "")),
+            "/api/culture/kudos": lambda: T.run("give_kudos", to=body.get("to", ""), message=body.get("message", ""),
+                                                value=body.get("value", "")),
+            "/api/culture/awards": lambda: T.run("nominate_for_award", award=body.get("award", ""),
+                                                 employee=body.get("employee", ""), reason=body.get("reason", ""),
+                                                 cycle=body.get("cycle", "")),
+            "/api/culture/awards/decide": lambda: T.run("decide_award", nomination_id=int(body.get("nomination_id") or 0),
+                                                        status=body.get("status", ""), note=body.get("note", "")),
+            "/api/culture/surveys": lambda: T.run("start_pulse_survey", title=body.get("title", ""),
+                                                  question=body.get("question", ""),
+                                                  scale_max=int(body.get("scale_max") or 5), closes=body.get("closes", "")),
+            "/api/culture/surveys/answer": lambda: T.run("answer_pulse_survey", survey_id=int(body.get("survey_id") or 0),
+                                                         score=int(body.get("score") or 0), comment=body.get("comment", "")),
+            "/api/culture/surveys/close": lambda: T.run("close_pulse_survey", survey_id=int(body.get("survey_id") or 0)),
+        }
+        if path not in calls:
+            return self._send(404, {"error": "not found"})
+        if path.startswith("/api/culture/events") or path in ("/api/culture/surveys", "/api/culture/surveys/close",
+                                                               "/api/culture/awards/decide"):
+            auth.require("events:manage")   # so the console gets a clean 403 rather than a tool error
+        return self._ok_or_error(calls[path]())
+
+    def _post_projects(self, path, body):
+        calls = {
+            "/api/projects/create": lambda: T.run("create_project", project_name=body.get("name", ""), client=body.get("client", ""),
+                                                  manager=body.get("manager", ""), start_date=body.get("start_date", ""),
+                                                  end_date=body.get("end_date", ""),
+                                                  skills=[s.strip() for s in str(body.get("skills", "")).split(",") if s.strip()],
+                                                  notes=body.get("notes", "")),
+            "/api/projects/update": lambda: T.run("update_project", project=body.get("project", ""),
+                                                  status=body.get("status", ""), health=body.get("health", ""),
+                                                  manager=body.get("manager", ""), end_date=body.get("end_date", ""),
+                                                  notes=body.get("notes", "")),
+            "/api/projects/allocate": lambda: T.run("allocate_person", employee=body.get("employee", ""),
+                                                    project=body.get("project", ""), percent=float(body.get("percent") or 100),
+                                                    role=body.get("role", ""), start_date=body.get("start_date", ""),
+                                                    end_date=body.get("end_date", "")),
+            "/api/projects/release": lambda: T.run("release_person", allocation_id=int(body.get("allocation_id") or 0),
+                                                   end_date=body.get("end_date", ""), note=body.get("note", "")),
+            "/api/projects/task": lambda: T.run("add_project_task", project=body.get("project", ""),
+                                                title=body.get("title", ""), owner=body.get("owner", ""),
+                                                due=body.get("due", ""), kind=body.get("kind", "task")),
+            "/api/projects/task/update": lambda: T.run("update_project_task", task_id=int(body.get("task_id") or 0),
+                                                       status=body.get("status", ""), owner=body.get("owner", ""),
+                                                       due=body.get("due", ""), note=body.get("note", "")),
+            "/api/projects/hours": lambda: T.run("log_project_hours", project=body.get("project", ""),
+                                                 day=body.get("day", ""), hours=float(body.get("hours") or 0),
+                                                 employee=body.get("employee", ""), note=body.get("note", "")),
+        }
+        if path not in calls:
+            return self._send(404, {"error": "not found"})
+        return self._ok_or_error(calls[path]())
+
+    def _post_payroll(self, path, body):
+        month = body.get("month", "")
+        calls = {
+            "/api/payroll/run": lambda: T.run("run_payroll", month=month),
+            "/api/payroll/submit": lambda: T.run("submit_payroll", month=month),
+            "/api/payroll/paid": lambda: T.run("mark_payroll_paid", month=month, reference=body.get("reference", "")),
+            "/api/payroll/adjustment": lambda: T.run("add_pay_adjustment", employee=body.get("employee", ""), month=month,
+                                                     kind=body.get("kind", ""), amount=float(body.get("amount") or 0),
+                                                     note=body.get("note", "")),
+            "/api/payroll/salary": lambda: T.run("set_salary", employee=body.get("employee", ""),
+                                                 ctc_annual=float(body.get("ctc_annual") or 0),
+                                                 effective_from=body.get("effective_from", ""), metro=bool(body.get("metro")),
+                                                 regime=body.get("regime", "new"), pt_state=body.get("pt_state", ""),
+                                                 pan=body.get("pan", ""), uan=body.get("uan", ""),
+                                                 bank_account=body.get("bank_account", ""), ifsc=body.get("ifsc", "")),
+            "/api/payroll/details": lambda: T.run("update_salary_details", employee=body.get("employee", ""),
+                                                  pan=body.get("pan", ""), uan=body.get("uan", ""),
+                                                  bank_account=body.get("bank_account", ""), ifsc=body.get("ifsc", ""),
+                                                  pt_state=body.get("pt_state", ""), regime=body.get("regime", "")),
+            "/api/payroll/revision": lambda: T.run("propose_salary_revision", employee=body.get("employee", ""),
+                                                   new_ctc_annual=float(body.get("new_ctc_annual") or 0),
+                                                   pct=float(body.get("pct") or 0),
+                                                   effective_from=body.get("effective_from", ""), reason=body.get("reason", "")),
+            "/api/payroll/breakup": lambda: T.run("salary_breakup", ctc_annual=float(body.get("ctc_annual") or 0),
+                                                  metro=bool(body.get("metro"))),
+        }
+        if path not in calls:
+            return self._send(404, {"error": "not found"})
+        return self._ok_or_error(calls[path]())
+
+    def _post_hiring(self, path, body):
+        import base64
+        from . import hiring
+        if path == "/api/hiring/upload":
+            auth.require("agent:recruitment")
+            job = db.q1("SELECT id FROM jobs WHERE id=?", (body.get("job_id", ""),))
+            if not job:
+                raise ValueError("Pick a job for these resumes")
+            folder = hiring.inbox_root() / job["id"]
+            folder.mkdir(parents=True, exist_ok=True)
+            saved = []
+            for f in body.get("files", [])[:50]:
+                name = re.sub(r"[^\w.\- ]", "_", f.get("name", ""))[:120].strip()
+                if not name or "." not in name or name.rsplit(".", 1)[1].lower() not in ("txt", "md", "pdf", "docx"):
+                    raise ValueError(f"Unsupported file {f.get('name')!r}: use .pdf, .docx, .txt or .md")
+                data = base64.b64decode(f.get("content_b64", ""), validate=True)
+                if len(data) > MAX_FILE:
+                    raise ValueError(f"{name} is larger than 5 MB")
+                (folder / name).write_bytes(data)
+                saved.append(name)
+            return self._ok_or_error({"saved": saved, **T.run("ingest_resumes", job_id=job["id"])})
+        m = re.fullmatch(r"/api/hiring/candidates/([\w-]+)/(\w+)", path)
+        if m:
+            cid, action = m.groups()
+            calls = {
+                "move": lambda: T.run("move_candidate", candidate=cid, stage=body.get("stage", ""), note=body.get("note", "")),
+                "schedule": lambda: T.run("schedule_interview", candidate=cid, round_name=body.get("round", ""),
+                                          when=body.get("when", ""), interviewer=body.get("interviewer", ""),
+                                          mode=body.get("mode", "Video call")),
+                "result": lambda: T.run("record_interview_result", candidate=cid, round_name=body.get("round", ""),
+                                        result=body.get("result", ""), rating=int(body.get("rating") or 0),
+                                        feedback=body.get("feedback", "")),
+                "offer": lambda: T.run("make_offer", candidate=cid, ctc_lpa=float(body.get("ctc_lpa") or 0),
+                                       joining_date=body.get("joining_date", "")),
+                "offer_response": lambda: T.run("record_offer_response", candidate=cid, accepted=bool(body.get("accepted")),
+                                                joining_date=body.get("joining_date", "")),
+                "joined": lambda: T.run("mark_joined", candidate=cid),
+            }
+            if action not in calls:
+                return self._send(404, {"error": "unknown action"})
+            return self._ok_or_error(calls[action]())
+        m = re.fullmatch(r"/api/hiring/followups/(\d+)/done", path)
+        if m:
+            return self._ok_or_error(T.run("complete_followup", followup_id=int(m.group(1)), note=body.get("note", "")))
+        m = re.fullmatch(r"/api/hiring/jobs/([\w-]+)/rounds", path)
+        if m:
+            return self._ok_or_error(T.run("set_interview_rounds", job_id=m.group(1), rounds=body.get("rounds", [])))
+        return self._send(404, {"error": "not found"})
+
     def do_POST(self):
         path = self.path.split("?")[0]
         try:
@@ -130,7 +374,8 @@ class Handler(BaseHTTPRequestHandler):
             except auth.AuthError as exc:
                 return self._send(401, {"error": str(exc)})
             user = auth.user_for_token(token)
-            return self._send(200, {"username": user.username, "role": user.role},
+            return self._send(200, {"username": user.username, "role": user.role,
+                                    "employee_id": user.employee_id},
                               headers={"Set-Cookie": f"{COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800"})
         user = self._user()
         m = re.fullmatch(r"/a2a/(\w+)", path)
@@ -153,6 +398,14 @@ class Handler(BaseHTTPRequestHandler):
             auth._current.reset(reset)
 
     def _post_api(self, path, body, user):
+        if path.startswith("/api/hiring/"):
+            return self._post_hiring(path, body)
+        if path.startswith("/api/payroll/"):
+            return self._post_payroll(path, body)
+        if path.startswith("/api/projects/"):
+            return self._post_projects(path, body)
+        if path.startswith("/api/culture/"):
+            return self._post_culture(path, body)
         if path == "/api/logout":
             auth.logout(self._token())
             return self._send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Max-Age=0; Path=/"})

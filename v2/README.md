@@ -39,7 +39,113 @@ python app.py budget                                # spend vs budget per agent
 python app.py budget set screening 20 --on-exceed block
 ```
 
-Web console tabs depend on your role: Ask (with 👍 and 👎 feedback), Approvals, Tickets (approve or reject fixes), Budget, and Outbox (email drafts).
+Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Projects, Culture, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
+
+## Hiring pipeline
+
+Drop resumes (.pdf, .docx, .txt, .md) into `inbox/<JOB-ID>/` (for example `inbox/JOB-101/`), or drag them onto the
+Hiring tab in the web console. They are read, screened and sorted into **selected**, **on hold** or **rejected**, and a
+copy lands in `inbox/<JOB-ID>/sorted/<stage>/` so the folder shows the result too. With `python app.py triggers run`
+going, new files are picked up every 2 minutes.
+
+Each job has its own interview rounds (default L1, L2, HR, Final). Change them in the Hiring tab or with
+`python app.py hiring rounds JOB-101 L1 L2 L3 HR Final`. From the Hiring board you schedule rounds, record pass, fail or
+hold with a 1-5 rating and feedback, request an offer (it waits in Approvals), record the candidate's answer, and mark
+them joined. Accepting an offer creates the new hire, starts onboarding, and sets follow-ups: a pre-joining call,
+a documents check, day one, a 30-day check-in and a 90-day probation review. Every step is on the candidate's timeline.
+
+```bash
+python app.py hiring sample          # copy three sample resumes into inbox/JOB-101/
+python app.py hiring ingest          # read and screen them now
+python app.py hiring                 # pipeline counts per stage and round
+python app.py hiring followups
+python app.py ask "Divya cleared L1 with rating 4, schedule the next round on 2026-10-12 at 15:00"
+```
+
+The `inbox/` folder is git-ignored because resumes are personal data.
+
+## Insights dashboard
+
+HR and admins land on the Dashboard: active candidates, interviews this week, offers out, joiners in the next 30 days
+and follow-ups due; a **Needs your attention** list (overdue follow-ups, approvals, candidates with no interview,
+missing interview results, joiners with missing documents, budgets past 80%, fixes waiting for review), each with an
+Open button; the hiring funnel, results by round, time to offer/acceptance/joining, offer acceptance, the must-have
+skills most often missing from rejected resumes; headcount by department, joiners by month, leave by type,
+onboarding progress; and AI spend per day and per agent. Pick a job to narrow the hiring numbers. Every chart has a
+Table button, and **Export candidates (CSV)** downloads the pipeline for a spreadsheet.
+
+```bash
+python app.py insights                # plain-language snapshot
+python app.py insights attention      # what needs HR today
+python app.py insights csv > pipeline.csv
+python app.py ask "How is hiring going?"
+```
+
+A snapshot is saved to `var/reports/` every morning (`insights_report` trigger); on Mondays it is also drafted as an
+email to HR (`HRAI_HR_EMAIL`).
+
+## Projects and staffing
+
+Projects hold who is on them (a percentage of their time between two dates), tasks and milestones, and timesheets.
+Nobody can be booked past 100%, so capacity, the bench and utilisation all come from the same numbers, with approved
+leave taken off.
+
+```bash
+python app.py projects                 # board: team size, FTE, open and overdue tasks, hours, days left
+python app.py projects capacity        # who is booked how much, and who is free
+python app.py projects risks           # overdue work, unstaffed projects, skill gaps, people rolling off
+python app.py ask "Who is free next month?"
+python app.py ask "Put Deepa on the Customer portal revamp at 40%"
+python app.py ask "What is slipping?"
+```
+
+A project lists the skills it needs; when nobody on it has one, the Projects page says so and names people who are
+free and do. Managers get the Projects page; employees see their own projects and log their own hours.
+
+## Culture, recognition and HR activities
+
+Events (festivals, town halls, offsites, training, volunteering, sports) carry a budget, an audience and RSVPs. A
+budget over the limit (`HRAI_EVENT_BUDGET_LIMIT`, ₹25,000 by default) goes to **Approvals** first, and nothing is
+announced until a human says yes. The invitation itself is a draft in the outbox; the app never emails anyone.
+
+```bash
+python app.py culture                  # events this year, spend against budget, kudos, pulse scores
+python app.py culture calendar         # events, public holidays, birthdays and work anniversaries
+python app.py culture kudos            # the kudos wall
+python app.py culture awards           # nominations and winners
+python app.py culture pulse            # survey results, once three people have answered
+python app.py ask "Plan a Diwali lunch on 2026-11-08 with a budget of 20000"
+python app.py ask "Kudos to Deepa for covering the on-call weekend"
+python app.py ask "What is coming up this month?"
+```
+
+Anyone can send kudos, nominate a colleague for an award and answer a pulse survey; HR decides awards and starts
+surveys. Pulse answers keep only a hash of who answered, and results stay hidden until three people have answered, so
+no single answer can be traced back. The **Culture** page shows all of it.
+
+## Salary and payroll
+
+Indian payroll: CTC breakup (basic, HRA, special allowance, employer PF, gratuity), employee PF and ESI, professional
+tax by state, and TDS under the new or the old regime, projected across the financial year. Employees see their own
+payslip on **My pay**; HR runs payroll on the **Payroll** page.
+
+```bash
+python app.py payroll run --month 2026-10      # draft: pay, PF, ESI, PT and TDS for everyone
+python app.py payroll show --month 2026-10
+python app.py payroll submit --month 2026-10   # goes to Approvals; someone else must approve it
+python app.py payroll paid NEFT-5521 --month 2026-10
+python app.py payroll slip E101 --month 2026-10
+python app.py ask "What is the breakup for a 12 lakh CTC?"
+python app.py ask "Give Deepa a 10% hike from next month"     # waits for approval
+```
+
+A salary revision and a payroll run both need human approval, and payroll cannot be approved by whoever submitted it.
+Approval writes payslips and `var/payroll/<month>/bank_transfer.csv`; **nothing is ever paid from here**. HR uploads
+that file to the bank and then records the reference. An approved month is locked: fix it next month with an arrears
+or recovery item.
+
+Rates, slabs and the professional-tax tables live in `data/payroll_rules.json`. Check them with your CA at the start
+of each financial year and edit that file; no code change is needed.
 
 ## Tickets and auto-fixes
 
@@ -66,7 +172,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 28 tests, offline, about 15 seconds
+python -m unittest discover -s tests -t .     # 82 tests, offline, about 21 seconds
 ```
 
 ## Layout
@@ -78,11 +184,17 @@ python -m unittest discover -s tests -t .     # 28 tests, offline, about 15 seco
 | `hrai/gateway/` | AI gateway (LiteLLM, budgets), agent gateway, optional LiteLLM proxy config |
 | `hrai/knowledge/` | Chroma vectors (RAG), knowledge graph (KAG), CAG, memory (MAG) |
 | `hrai/tools.py` | The HR tools (LangChain), with role checks |
+| `hrai/hiring.py` | Hiring pipeline: inbox, screening, rounds, offers, joining, follow-ups |
+| `hrai/insights.py` | HR analytics, the needs-attention list, daily report, CSV export |
+| `hrai/payroll.py` | Salary structures, Indian payroll, payslips, payroll runs |
+| `hrai/projects.py` | Projects, allocations, capacity and the bench, tasks, timesheets |
+| `hrai/engage.py` | Events and budgets, RSVPs, kudos, awards, anonymous pulse surveys |
 | `hrai/auth.py`, `hrai/db.py` | Logins and roles; SQLite schema |
 | `hrai/hooks.py`, `hooks.d/` | Hooks |
 | `hrai/triggers.py`, `hrai/automations.py` | Triggers |
 | `hrai/skills.py`, `skills/` | Skills |
 | `hrai/a2a.py`, `hrai/mcp_server.py`, `hrai/web.py` | A2A, MCP, web console and API |
 | `hrai/ops/` | Ticket tracker and ticket agent |
+| `data/payroll_rules.json` | PF, ESI, professional tax and income-tax rates, editable each year |
 | `data/` | Sample HR data (same as v1); `kb_additions.md` appears when approved fixes add to the handbook |
 | `var/` | Runtime state: database, vectors, reports, worktrees (git-ignored) |

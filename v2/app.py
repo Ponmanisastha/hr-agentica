@@ -10,6 +10,11 @@
   python app.py triggers list | run | fire NAME
   python app.py tickets list | show ID | work [ID] | approve ID | reject ID [--note TEXT] | sync
   python app.py budget [show] | budget set AGENT USD [--on-exceed downgrade|block]
+  python app.py hiring ingest [--job JOB-101] | board | followups | rounds JOB-101 L1 L2 L3 HR Final | sample
+  python app.py projects [board] | capacity | risks | tasks         projects, staffing and capacity
+  python app.py payroll run|show|submit|paid REF|slip E101 [--month 2026-10]     salary and payroll
+  python app.py culture [summary] | calendar | kudos | awards | pulse    events, recognition and pulse
+  python app.py insights [--job JOB-101] | attention | report | csv     HR analytics; csv prints the pipeline
   python app.py index                      rebuild vectors and the knowledge graph
   python app.py a2a send URL "<text>" --token T   call any A2A agent
 """
@@ -86,6 +91,34 @@ def demo():
     for t in tracker.list_tickets("awaiting_approval"):
         print(f"  #{t['id']} waits for a human: python app.py tickets show {t['id']}  then  tickets approve {t['id']}")
     print("=" * 78)
+    print("HIRING PIPELINE: sample resumes dropped into the inbox, then moved through the rounds")
+    import shutil
+    from hrai import hiring
+    shutil.copytree(config.DATA / "sample_inbox", hiring.inbox_root(), dirs_exist_ok=True)
+    for r in ["Read the new resumes in the inbox",
+              f"Schedule Divya Krishnan for L1 on {nxt(2)} at 11:00",
+              f"Divya cleared L1 with rating 4, schedule the next round on {nxt(4)} at 15:00",
+              "What is the hiring pipeline status?"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
+    print("PROJECTS: who is on what, who is free, and what is slipping")
+    for r in ["Show the project board", "Who is free next month?", "What is slipping?"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
+    print("PAYROLL: salary breakup, a draft run, and the approval it waits on")
+    for r in ["What is the breakup for a 12 lakh CTC?", f"Run payroll for {config.today().strftime('%Y-%m')}",
+              "Submit the payroll for approval"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
+    print("CULTURE: what is coming up, kudos, and an event whose budget needs a human")
+    for r in ["What is coming up this month?", "Kudos to Deepa Sharma for fixing the payroll run",
+              f"Plan a team lunch on {nxt(20)} with a budget of 40000"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
+    print("INSIGHTS: numbers and what needs attention (the web console's Dashboard shows the same)")
+    for r in ["How is hiring going?", "What needs my attention today?"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
     print("BUDGET:", json.dumps(llm.budget_report()["total"]))
     print("Drafted emails:", db.q1("SELECT COUNT(*) AS n FROM outbox")["n"], " Pending approvals:",
           db.q1("SELECT COUNT(*) AS n FROM approvals WHERE status='pending'")["n"])
@@ -105,6 +138,8 @@ def main(argv):
     p.add_argument("--on-exceed", default="downgrade")
     p.add_argument("--token")
     p.add_argument("--demo-users", action="store_true")
+    p.add_argument("--job", default="")
+    p.add_argument("--month", default="")
     a = p.parse_args(argv)
     cmd, args = a.cmd, a.args
 
@@ -200,6 +235,110 @@ def main(argv):
         if args[:1] == ["set"]:
             llm.set_budget(args[1], float(args[2]), a.on_exceed)
         print(json.dumps(llm.budget_report(), indent=2))
+    elif cmd == "hiring":
+        from hrai import hiring
+        from hrai import tools as T
+        sub = args[0] if args else "board"
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "sample":  # copy the sample resumes into the inbox
+                import shutil
+                src = config.DATA / "sample_inbox"
+                shutil.copytree(src, hiring.inbox_root(), dirs_exist_ok=True)
+                print(f"Copied sample resumes into {hiring.inbox_root()}; now run: python app.py hiring ingest")
+            elif sub == "ingest":
+                print(json.dumps(T.run("ingest_resumes", job_id=a.job), indent=2, default=str))
+            elif sub == "followups":
+                for f in hiring.followups(14):
+                    print(f"#{f['id']:<4} {f['due']}  {f['name']:20} {f['note']}")
+            elif sub == "rounds":
+                print(hiring.set_rounds(args[1], args[2:]))
+            else:
+                print(hiring.summary(a.job or None))
+        finally:
+            auth._current.reset(token)
+    elif cmd == "projects":
+        from hrai import projects
+        sub = args[0] if args else "board"
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "capacity":
+                for c in projects.capacity():
+                    on = ", ".join(f"{p['project']} {p['percent']:g}%" for p in c["projects"]) or "free"
+                    print(f"{c['id']:6} {c['name']:22} {c['allocated_pct']:>5.0f}%  {on}")
+            elif sub == "risks":
+                for x in projects.risks():
+                    print(f"[{x['severity']}] {x['text']}")
+            elif sub == "tasks":
+                for t in projects.tasks():
+                    print(f"#{t['id']:<4} {t['project']:24} {t['title']:34} {t['status']:12} {t['due'] or '':10}"
+                          + (" OVERDUE" if t["overdue"] else ""))
+            else:
+                print(projects.summary())
+        finally:
+            auth._current.reset(token)
+    elif cmd == "payroll":
+        from hrai import payroll
+        from hrai import tools as T
+        sub = args[0] if args else "show"
+        month = a.month or ""
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "run":
+                print(json.dumps(T.run("run_payroll", month=month), indent=2, default=str))
+            elif sub == "submit":
+                print(json.dumps(T.run("submit_payroll", month=month), indent=2))
+            elif sub == "paid":
+                print(json.dumps(T.run("mark_payroll_paid", month=month, reference=args[1]), indent=2))
+            elif sub == "slip":
+                print(payroll.render_payslip(args[1], month) or "No payslip for that employee and month")
+            else:
+                s = payroll.summary(month)
+                print(json.dumps({k: v for k, v in s.items() if k != "payslips"}, indent=2, default=str))
+                for p in s.get("payslips", []):
+                    print(f"  {p['employee_id']:6} {p['name']:22} net {p['net']:>12,}")
+        finally:
+            auth._current.reset(token)
+    elif cmd == "culture":
+        from hrai import engage
+        sub = args[0] if args else "summary"
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "calendar":
+                for c in engage.calendar(60):
+                    extra = (f"{c['status']}, {c['attending']} attending" if c["type"] == "event" else c["type"])
+                    print(f"{c['day']}  {c['title']:40} {extra}")
+            elif sub == "kudos":
+                for k in engage.kudos_wall()["kudos"]:
+                    print(f"{k['created_at'][:10]}  {k['to_name']:20} {k['message'][:60]}  (from {k['from_name'] or 'the team'})")
+            elif sub == "awards":
+                for x in engage.awards():
+                    print(f"#{x['id']:<4} {x['award']:28} {x['name']:20} {x['cycle']:8} {x['status']}")
+            elif sub == "pulse":
+                for s_ in engage.surveys(False):
+                    res = engage.survey_results(s_["id"])
+                    print(f"#{s_['id']:<3} {s_['title']:22} {s_['question'][:46]:46} "
+                          + (res.get("note") or f"{res['average']}/{res['scale_max']} from {res['answers']}"))
+            else:
+                print(engage.summary())
+        finally:
+            auth._current.reset(token)
+    elif cmd == "insights":
+        from hrai import insights
+        sub = args[0] if args else ""
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "attention":
+                for i, item in enumerate(insights.attention(20), 1):
+                    print(f"{i:>2}. [{item['kind']}] {item['text']}  ({item['tab']})")
+            elif sub == "report":
+                print("Saved", insights.save_report())
+            elif sub == "csv":
+                sys.stdout.write(insights.candidates_csv(a.job or None))
+            else:
+                print(insights.narrate(insights.overview(a.job or None)))
+        finally:
+            auth._current.reset(token)
     elif cmd == "index":
         from hrai.knowledge import kag, vectors
         print(vectors.index_all(), kag.build())

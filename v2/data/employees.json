@@ -11,7 +11,15 @@
     "email": "deepa.nair@example.com",
     "manager_email": "arun.kumar@example.com",
     "department": "Engineering",
-    "level": "L2"
+    "level": "L2",
+    "skills": [
+      "python",
+      "sql",
+      "rest api",
+      "django"
+    ],
+    "date_of_birth": "1994-10-18",
+    "joined_on": "2023-02-01"
   },
   {
     "id": "E102",
@@ -25,7 +33,15 @@
     "email": "sanjay.patel@example.com",
     "manager_email": "arun.kumar@example.com",
     "department": "Engineering",
-    "level": "L3"
+    "level": "L3",
+    "skills": [
+      "java",
+      "spring",
+      "kubernetes",
+      "sql"
+    ],
+    "date_of_birth": "1990-11-02",
+    "joined_on": "2021-07-19"
   },
   {
     "id": "E103",
@@ -39,6 +55,13 @@
     "email": "lakshmi.menon@example.com",
     "manager_email": "ravi.shankar@example.com",
     "department": "Human Resources",
-    "level": "L4"
+    "level": "L4",
+    "skills": [
+      "recruitment",
+      "payroll",
+      "employee relations"
+    ],
+    "date_of_birth": "1988-10-09",
+    "joined_on": "2019-04-15"
   }
 ]
