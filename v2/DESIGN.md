@@ -256,7 +256,7 @@ morning, `event_wrap_up` in the evening).
 
 ## 15. What was tested, and what was not
 
-**Tested (82 automated tests on Python 3.14.6, offline):**
+**Tested (96 automated tests on Python 3.14.6, offline):**
 - Login, hashing, lockout and roles
 - All four agents in rules-only mode
 - The LLM tool loop with a scripted model response
@@ -281,6 +281,10 @@ morning, `event_wrap_up` in the evening).
   changes and counts, the calendar with holidays and occasions, kudos (including to yourself), awards needing HR, a
   pulse survey staying hidden until three answers and refusing a second answer from the same person, role checks,
   the triggers and the API
+- The HR chat agent brief: your own policy documents (text, Word, unstructured) replacing the sample and driving the
+  leave rules, the watch trigger, leave balance and accrual from the database, date questions that book nothing,
+  applying, employees kept to their own data, follow-ups and conversation memory, role-aware routing, and the
+  Policies API
 - The full ticket workflow (gap → patch → worktree tests → review → approve → merge → closed, plus the reject and needs-human paths) in a repo where the app sits in a subfolder
 
 **Also checked by hand:** the MCP server over stdio with a real MCP client, the CrewAI wiring on Python 3.13 (crew assembly and tools, with the model call mocked), and MiniLM semantic search.

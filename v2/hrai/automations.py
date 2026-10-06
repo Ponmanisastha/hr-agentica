@@ -66,6 +66,24 @@ def reindex_knowledge():
     return {"vectors": vectors.index_all(), "kg_triples": kag.build()}
 
 
+def reindex_policies():
+    """Re-embed the policy documents and rebuild the leave rules from them; returns what was indexed."""
+    from .knowledge import kag, policies, vectors
+    out = {"policy_sections": vectors.index_policies(), "kg_triples": kag.build(), "fingerprint": policies.fingerprint()}
+    (config.home() / "policy_fingerprint").write_text(out["fingerprint"])
+    return out
+
+
+@triggers.schedule("policy_watch", every=300)
+def policy_watch():
+    """Every 5 minutes: when a file in policies/ is added, changed or removed, re-index the policy documents."""
+    from .knowledge import policies
+    seen = config.home() / "policy_fingerprint"
+    if seen.exists() and seen.read_text().strip() == policies.fingerprint():
+        return {"changed": False}
+    return {"changed": True, **reindex_policies()}
+
+
 @triggers.on("new_hire.created")
 def plan_for_new_hire(payload):
     """When a new hire is added: build their onboarding plan straight away."""

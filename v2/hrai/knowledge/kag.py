@@ -15,23 +15,25 @@ import re
 from .. import db
 from . import vectors
 
-# (subject, predicate, regex on the handbook section, section title prefix)
+# (subject, predicate, regex on a policy section, word the section title must contain). Matching on the title
+# rather than a section number means your own documents work whatever order or numbering they use.
 RULE_PATTERNS = [
-    ("annual leave", "days_per_year", r"earns (\d+) days of annual leave", "1."),
-    ("annual leave", "notice_days", r"at least (\d+) calendar days in advance", "1."),
-    ("annual leave", "auto_approve_max_days", r"up to (\d+) working days", "1."),
-    ("annual leave", "carry_forward_days", r"Up to (\d+) unused days", "1."),
-    ("sick leave", "days_per_year", r"get (\d+) days of paid sick leave", "2."),
-    ("sick leave", "certificate_after_days", r"more than (\d+) consecutive working days", "2."),
-    ("casual leave", "days_per_year", r"get (\d+) days of casual leave", "3."),
-    ("casual leave", "max_consecutive_days", r"at most (\d+) consecutive days", "3."),
-    ("casual leave", "notice_days", r"at least (\d+) day in advance", "3."),
-    ("maternity leave", "weeks", r"Maternity leave is (\d+) weeks", "5."),
-    ("paternity leave", "working_days", r"Paternity leave is (\d+) working days", "5."),
-    ("notice period", "days_L3_and_above", r"notice period is (\d+) days for employees at level L3", "6."),
-    ("notice period", "days_other_levels", r"and (\d+) days for others", "6."),
-    ("work from home", "max_days_per_week", r"up to (\d+) days a week", "7."),
-    ("internet reimbursement", "cap_rupees_per_month", r"capped at ([\d,]+) rupees", "8."),
+    ("annual leave", "days_per_year", r"earns (\d+(?:\.\d+)?) days of annual leave", "annual"),
+    ("annual leave", "notice_days", r"at least (\d+) calendar days in advance", "annual"),
+    ("annual leave", "auto_approve_max_days", r"up to (\d+) working days", "annual"),
+    ("annual leave", "carry_forward_days", r"[Uu]p to (\d+) unused days", "annual"),
+    ("annual leave", "credit_per_month", r"credited at (\d+(?:\.\d+)?) days per month", "annual"),
+    ("sick leave", "days_per_year", r"get (\d+) days of paid sick leave", "sick"),
+    ("sick leave", "certificate_after_days", r"more than (\d+) consecutive working days", "sick"),
+    ("casual leave", "days_per_year", r"get (\d+) days of casual leave", "casual"),
+    ("casual leave", "max_consecutive_days", r"at most (\d+) consecutive days", "casual"),
+    ("casual leave", "notice_days", r"at least (\d+) days? in advance", "casual"),
+    ("maternity leave", "weeks", r"Maternity leave is (\d+) weeks", "maternity"),
+    ("paternity leave", "working_days", r"Paternity leave is (\d+) working days", "paternity"),
+    ("notice period", "days_L3_and_above", r"notice period is (\d+) days for employees at level L3", "notice"),
+    ("notice period", "days_other_levels", r"and (\d+) days for others", "notice"),
+    ("work from home", "max_days_per_week", r"up to (\d+) days a week", "home"),
+    ("internet reimbursement", "cap_rupees_per_month", r"capped at ([\d,]+) rupees", "reimburs"),
 ]
 DEFAULT_RULES = {  # used only if the handbook text no longer matches a pattern
     ("annual leave", "notice_days"): 7, ("annual leave", "auto_approve_max_days"): 5,
@@ -65,13 +67,16 @@ def build():
         for s in json.loads(j["nice_to_have"]):
             add(j["id"], "prefers_skill", s, "jobs")
         add(j["id"], "min_years", j["min_years"], "jobs")
-    for sec in vectors.sections(vectors.handbook_text(), "policy_handbook"):
+    from . import policies
+    found = set()
+    for sec in policies.sections():
         title = sec["meta"]["section"]
-        for subj, pred, pattern, prefix in RULE_PATTERNS:
-            if title.startswith(prefix):
+        for subj, pred, pattern, word in RULE_PATTERNS:
+            if (subj, pred) not in found and word in title.lower():
                 m = re.search(pattern, sec["text"])
                 if m:
-                    add(subj, pred, m.group(1).replace(",", ""), f"handbook section {title}")
+                    found.add((subj, pred))
+                    add(subj, pred, m.group(1).replace(",", ""), f"{sec['meta']['source']}, section {title}")
     return db.q1("SELECT COUNT(*) AS n FROM kg_triples")["n"]
 
 
@@ -80,6 +85,12 @@ def rule(subject, predicate):
     if row:
         return float(row["object"]) if "." in row["object"] else int(row["object"])
     return DEFAULT_RULES.get((subject, predicate))
+
+
+def source(subject, predicate):
+    """Where a rule came from, for citations ("Policy handbook, section 1. Annual leave")."""
+    row = db.q1("SELECT source FROM kg_triples WHERE subject=? AND predicate=?", (subject, predicate))
+    return row["source"] if row else "the default rules (not found in your policy documents)"
 
 
 def neighbours(entity):

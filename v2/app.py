@@ -15,6 +15,7 @@
   python app.py payroll run|show|submit|paid REF|slip E101 [--month 2026-10]     salary and payroll
   python app.py culture [summary] | calendar | kudos | awards | pulse    events, recognition and pulse
   python app.py insights [--job JOB-101] | attention | report | csv     HR analytics; csv prints the pipeline
+  python app.py policies [list] | add FILE... | reindex    your HR policy documents (policies/ folder)
   python app.py index                      rebuild vectors and the knowledge graph
   python app.py a2a send URL "<text>" --token T   call any A2A agent
 """
@@ -340,8 +341,28 @@ def main(argv):
         finally:
             auth._current.reset(token)
     elif cmd == "index":
-        from hrai.knowledge import kag, vectors
-        print(vectors.index_all(), kag.build())
+        from hrai import automations
+        from hrai.knowledge import vectors
+        print(vectors.index_all(), automations.reindex_policies())
+    elif cmd == "policies":
+        import shutil
+        from pathlib import Path
+        from hrai import automations
+        from hrai.knowledge import policies
+        sub = args[0] if args else "list"
+        if sub == "add":
+            for f in args[1:]:
+                shutil.copy2(f, policies.policy_dir() / Path(f).name)
+                print("added", Path(f).name)
+            print(automations.reindex_policies())
+        elif sub == "reindex":
+            print(automations.reindex_policies())
+        s_ = policies.summary()
+        print(f"Policy folder: {s_['folder']}" + ("  (empty, so the sample handbook is used)" if s_["using_sample"] else ""))
+        for d in s_["documents"]:
+            print(f"  {d['name']}: {len(d['sections'])} sections")
+            for sec in d["sections"]:
+                print(f"     - {sec}")
     elif cmd == "a2a":
         from hrai import a2a
         client = a2a.A2AClient(a.token or config.env("HRAI_A2A_TOKEN"))

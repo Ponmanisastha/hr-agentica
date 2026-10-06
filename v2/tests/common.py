@@ -8,7 +8,8 @@ import warnings
 
 warnings.simplefilter("ignore", ResourceWarning)
 HOME = tempfile.mkdtemp(prefix="hrai-test-")
-os.environ.update(HRAI_HOME=HOME, HRAI_INBOX=os.path.join(HOME, "inbox"), HRAI_MODE="mock", HRAI_EMBEDDINGS="hash",
+os.environ.update(HRAI_HOME=HOME, HRAI_INBOX=os.path.join(HOME, "inbox"), HRAI_POLICY_DIR=os.path.join(HOME, "policies"),
+                  HRAI_MODE="mock", HRAI_EMBEDDINGS="hash",
                   HRAI_TODAY="2026-10-06")
 for key in ("ANTHROPIC_API_KEY", "HRAI_GITHUB_REPO", "HRAI_GATEWAY_URL", "HRAI_A2A_URL"):
     os.environ.pop(key, None)

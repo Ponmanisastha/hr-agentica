@@ -269,9 +269,10 @@ def policy_context(question: str) -> dict:
 
 @hr_tool(ALL_ROLES)
 def search_policy(query: str, k: int = 3) -> dict:
-    """Semantic search over the HR policy handbook (RAG). Returns sections to quote and cite."""
-    return {"results": [{"section": h["meta"].get("section"), "text": h["text"], "similarity": h["score"]}
-                        for h in vectors.search("policy", query, k=k)]}
+    """Semantic search over your HR policy documents (RAG). Returns sections to quote, with the document and
+    section to cite."""
+    return {"results": [{"document": h["meta"].get("source"), "section": h["meta"].get("section"), "text": h["text"],
+                         "similarity": h["score"]} for h in vectors.search("policy", query, k=k)]}
 
 
 @hr_tool(ALL_ROLES)
@@ -308,7 +309,49 @@ def get_employee(employee_id: str) -> dict:
     if not e:
         return {"error": f"No employee {employee_id}"}
     e["leave_balance"] = {k: e.pop(k) for k in ("annual", "sick", "casual")}
+    e["notice_period_days"] = _notice_days(e["level"])
     return e
+
+
+def _notice_days(level):
+    """The notice period that applies to a level, from the policy (L3 and above vs others)."""
+    m = re.match(r"L(\d+)", level or "", re.I)
+    senior = bool(m) and int(m.group(1)) >= 3
+    return kag.rule("notice period", "days_L3_and_above" if senior else "days_other_levels")
+
+
+@hr_tool(ALL_ROLES)
+def leave_balance(employee_id: str = "", as_of: str = "") -> dict:
+    """Leave balance for an employee (yourself when no id is given): days left of each type, what was taken and
+    what is waiting for approval this year, upcoming approved leave, the yearly entitlement from the policy, and
+    how annual leave accrues month by month (projected to `as_of`, YYYY-MM-DD, default today)."""
+    user = auth.current_user()
+    employee_id = (employee_id or user.employee_id or "").strip()
+    if not employee_id:
+        return {"error": "Which employee? Your login is not linked to an employee record."}
+    _check_employee_access(employee_id)
+    e = db.q1("SELECT * FROM employees WHERE upper(id)=upper(?)", (employee_id,))
+    if not e:
+        return {"error": f"No employee {employee_id}"}
+    when = date.fromisoformat(as_of) if as_of else config.today()
+    year = str(when.year)
+    rows = db.q("SELECT leave_type, start_date, end_date, working_days, status FROM leave_requests "
+                "WHERE employee_id=? AND substr(start_date,1,4)=? ORDER BY start_date", (e["id"], year))
+    types = ("annual", "sick", "casual")
+    out = {"employee_id": e["id"], "name": e["name"], "manager": e["manager"], "as_of": when.isoformat(),
+           "remaining": {t: e[t] for t in types},
+           "taken_this_year": {t: sum(r["working_days"] for r in rows if r["leave_type"] == t and r["status"] == "approved")
+                               for t in types},
+           "waiting_for_approval": [r for r in rows if r["status"] == "pending_manager"],
+           "upcoming": [r for r in rows if r["status"] == "approved" and r["start_date"] >= config.today().isoformat()],
+           "entitlement_per_year": {t: kag.rule(f"{t} leave", "days_per_year") for t in types}}
+    per_year = out["entitlement_per_year"]["annual"] or 0
+    per_month = kag.rule("annual leave", "credit_per_month") or round(per_year / 12, 2)
+    out["annual_accrual"] = {"credited_per_month": per_month, "months_credited": when.month,
+                             "accrued_this_year": min(per_year, round(per_month * when.month, 2)),
+                             "carry_forward_cap": kag.rule("annual leave", "carry_forward_days"),
+                             "policy": kag.source("annual leave", "credit_per_month")}
+    return out
 
 
 def _working_days(start, end):
@@ -342,17 +385,20 @@ def evaluate_leave_request(employee_id: str, leave_type: str, start_date: str, e
     if lt == "annual":
         need, cap = kag.rule("annual leave", "notice_days"), kag.rule("annual leave", "auto_approve_max_days")
         if notice < need:
-            reasons.append(f"Only {notice} days' notice; policy section 1 asks for {need}")
+            reasons.append(f"Only {notice} days' notice; the policy asks for {need} ({kag.source('annual leave', 'notice_days')})")
         if days > cap:
-            reasons.append(f"More than {cap} working days needs manager approval (section 1)")
+            reasons.append(f"More than {cap} working days needs manager approval "
+                           f"({kag.source('annual leave', 'auto_approve_max_days')})")
     if lt == "casual":
         cap, need = kag.rule("casual leave", "max_consecutive_days"), kag.rule("casual leave", "notice_days")
         if days > cap:
-            reasons.append(f"Casual leave is limited to {cap} consecutive days (section 3)")
+            reasons.append(f"Casual leave is limited to {cap} consecutive days "
+                           f"({kag.source('casual leave', 'max_consecutive_days')})")
         if notice < need:
-            reasons.append(f"Casual leave needs {need} day's notice (section 3)")
+            reasons.append(f"Casual leave needs {need} day's notice ({kag.source('casual leave', 'notice_days')})")
     cert = kag.rule("sick leave", "certificate_after_days")
-    note = f"Medical certificate needed after return (section 2)" if lt == "sick" and days > cert else ""
+    note = (f"Medical certificate needed after return ({kag.source('sick leave', 'certificate_after_days')})"
+            if lt == "sick" and days > cert else "")
     decision = "approve" if not reasons else "route_to_manager"
     return {"employee": e["name"], "employee_id": e["id"], "manager": e["manager"], "leave_type": lt,
             "start_date": start_date, "end_date": end_date, "working_days": days, "notice_days": notice,

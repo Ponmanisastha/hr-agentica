@@ -43,6 +43,7 @@ PERMISSIONS = {
     "payroll:view": {"admin", "hr"},
     "projects:manage": {"admin", "hr", "manager"},
     "events:manage": {"admin", "hr"},
+    "policies:manage": {"admin", "hr"},
     "payroll:approve": {"admin", "hr"},
     "budget:set": {"admin"},
     "users:manage": {"admin"},
