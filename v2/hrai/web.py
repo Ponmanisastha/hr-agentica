@@ -94,6 +94,15 @@ class Handler(BaseHTTPRequestHandler):
     def _get_api(self, path, user):
         if path.startswith("/api/hiring/"):
             return self._get_hiring(path)
+        if path in ("/api/insights", "/api/insights/candidates.csv"):
+            from urllib.parse import parse_qs, urlparse
+            from . import insights
+            auth.require("insights:view")
+            job = parse_qs(urlparse(self.path).query).get("job", [""])[0] or None
+            if path.endswith(".csv"):
+                return self._send(200, insights.candidates_csv(job), "text/csv; charset=utf-8",
+                                  {"Content-Disposition": f'attachment; filename="candidates-{config.today()}.csv"'})
+            return self._send(200, insights.overview(job))
         if path == "/api/me":
             return self._send(200, {"username": user.username, "role": user.role, "employee_id": user.employee_id})
         if path == "/api/approvals":

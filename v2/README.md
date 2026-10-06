@@ -39,7 +39,7 @@ python app.py budget                                # spend vs budget per agent
 python app.py budget set screening 20 --on-exceed block
 ```
 
-Web console tabs depend on your role: Ask (with 👍 and 👎 feedback), Approvals, Tickets (approve or reject fixes), Budget, and Outbox (email drafts).
+Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
 
 ## Hiring pipeline
 
@@ -63,6 +63,26 @@ python app.py ask "Divya cleared L1 with rating 4, schedule the next round on 20
 ```
 
 The `inbox/` folder is git-ignored because resumes are personal data.
+
+## Insights dashboard
+
+HR and admins land on the Dashboard: active candidates, interviews this week, offers out, joiners in the next 30 days
+and follow-ups due; a **Needs your attention** list (overdue follow-ups, approvals, candidates with no interview,
+missing interview results, joiners with missing documents, budgets past 80%, fixes waiting for review), each with an
+Open button; the hiring funnel, results by round, time to offer/acceptance/joining, offer acceptance, the must-have
+skills most often missing from rejected resumes; headcount by department, joiners by month, leave by type,
+onboarding progress; and AI spend per day and per agent. Pick a job to narrow the hiring numbers. Every chart has a
+Table button, and **Export candidates (CSV)** downloads the pipeline for a spreadsheet.
+
+```bash
+python app.py insights                # plain-language snapshot
+python app.py insights attention      # what needs HR today
+python app.py insights csv > pipeline.csv
+python app.py ask "How is hiring going?"
+```
+
+A snapshot is saved to `var/reports/` every morning (`insights_report` trigger); on Mondays it is also drafted as an
+email to HR (`HRAI_HR_EMAIL`).
 
 ## Tickets and auto-fixes
 
@@ -89,7 +109,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 36 tests, offline, about 15 seconds
+python -m unittest discover -s tests -t .     # 43 tests, offline, about 15 seconds
 ```
 
 ## Layout
@@ -102,6 +122,7 @@ python -m unittest discover -s tests -t .     # 36 tests, offline, about 15 seco
 | `hrai/knowledge/` | Chroma vectors (RAG), knowledge graph (KAG), CAG, memory (MAG) |
 | `hrai/tools.py` | The HR tools (LangChain), with role checks |
 | `hrai/hiring.py` | Hiring pipeline: inbox, screening, rounds, offers, joining, follow-ups |
+| `hrai/insights.py` | HR analytics, the needs-attention list, daily report, CSV export |
 | `hrai/auth.py`, `hrai/db.py` | Logins and roles; SQLite schema |
 | `hrai/hooks.py`, `hooks.d/` | Hooks |
 | `hrai/triggers.py`, `hrai/automations.py` | Triggers |

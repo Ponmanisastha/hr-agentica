@@ -155,3 +155,21 @@ def stale_candidates():
             hiring.add_followup(c["id"], config.today().isoformat(), "stale", f"{c['name']} has been {c['stage']} for 5+ days; decide the next step")
             flagged.append(c["id"])
     return {"flagged": flagged}
+
+
+@triggers.schedule("insights_report", daily="07:45")
+def insights_report():
+    """Every morning: save an HR insights snapshot to var/reports/; on Mondays also draft it as an email to HR."""
+    from . import insights
+    data = insights.overview()
+    path = insights.save_report(data)
+    drafted = False
+    if config.today().weekday() == 0 or config.env("HRAI_INSIGHTS_EMAIL_DAILY") == "1":
+        reset = _as(auth.User(0, "trigger", "service"))
+        try:
+            T.run("draft_email", to=config.env("HRAI_HR_EMAIL", "hr@example.com"),
+                  subject=f"HR insights for the week of {data['as_of']}", body=insights.narrate(data))
+            drafted = True
+        finally:
+            auth._current.reset(reset)
+    return {"report": str(path), "attention_items": len(data["attention"]), "email_drafted": drafted}

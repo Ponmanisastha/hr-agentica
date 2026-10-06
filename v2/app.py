@@ -11,6 +11,7 @@
   python app.py tickets list | show ID | work [ID] | approve ID | reject ID [--note TEXT] | sync
   python app.py budget [show] | budget set AGENT USD [--on-exceed downgrade|block]
   python app.py hiring ingest [--job JOB-101] | board | followups | rounds JOB-101 L1 L2 L3 HR Final | sample
+  python app.py insights [--job JOB-101] | attention | report | csv     HR analytics; csv prints the pipeline
   python app.py index                      rebuild vectors and the knowledge graph
   python app.py a2a send URL "<text>" --token T   call any A2A agent
 """
@@ -95,6 +96,10 @@ def demo():
               f"Schedule Divya Krishnan for L1 on {nxt(2)} at 11:00",
               f"Divya cleared L1 with rating 4, schedule the next round on {nxt(4)} at 15:00",
               "What is the hiring pipeline status?"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
+    print("INSIGHTS: numbers and what needs attention (the web console's Dashboard shows the same)")
+    for r in ["How is hiring going?", "What needs my attention today?"]:
         print_result(r, G.handle(r, user=user, channel="cli"))
     print("=" * 78)
     print("BUDGET:", json.dumps(llm.budget_report()["total"]))
@@ -232,6 +237,22 @@ def main(argv):
                 print(hiring.set_rounds(args[1], args[2:]))
             else:
                 print(hiring.summary(a.job or None))
+        finally:
+            auth._current.reset(token)
+    elif cmd == "insights":
+        from hrai import insights
+        sub = args[0] if args else ""
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "attention":
+                for i, item in enumerate(insights.attention(20), 1):
+                    print(f"{i:>2}. [{item['kind']}] {item['text']}  ({item['tab']})")
+            elif sub == "report":
+                print("Saved", insights.save_report())
+            elif sub == "csv":
+                sys.stdout.write(insights.candidates_csv(a.job or None))
+            else:
+                print(insights.narrate(insights.overview(a.job or None)))
         finally:
             auth._current.reset(token)
     elif cmd == "index":
