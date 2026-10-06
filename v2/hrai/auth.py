@@ -29,6 +29,7 @@ PERMISSIONS = {
     "agent:leave": {"admin", "hr", "manager", "employee", "service"},
     "agent:onboarding": {"admin", "hr", "service"},
     "agent:screening": {"admin", "hr", "service"},
+    "agent:recruitment": {"admin", "hr", "service"},
     "leave:any_employee": {"admin", "hr", "manager", "service"},
     "approvals:decide": {"admin", "hr", "manager"},
     "tickets:view": {"admin", "hr"},

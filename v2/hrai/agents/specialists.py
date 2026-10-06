@@ -120,7 +120,20 @@ SCREENING = Spec(
     "You are the HR screening coordinator. Follow the resume-screening skill (load it first).",
     examples=["Screen all resumes for the Backend Engineer opening and shortlist the best candidates."])
 
-SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING)}
+RECRUITMENT = Spec(
+    "recruitment", "Recruitment pipeline agent",
+    "Runs the hiring pipeline: resume inbox, interview rounds (L1..Ln, HR, Final), offers, joining and follow-ups.", "fast",
+    ["ingest_resumes", "pipeline_summary", "candidate_timeline", "move_candidate", "schedule_interview",
+     "record_interview_result", "make_offer", "record_offer_response", "mark_joined", "list_followups",
+     "complete_followup", "set_interview_rounds", "draft_email", "load_skill", "report_issue"],
+    "You are the recruitment pipeline agent. Use the tools to read new resumes from the inbox, track each candidate "
+    "through the job's interview rounds, record results, request offers (they need human approval), record offer "
+    "responses and joining, and manage follow-ups. Follow the hiring-pipeline skill. Refer to candidates by name and "
+    "id. Never invent interview results; ask if a result or date is missing. Keep answers short.",
+    examples=["Read the new resumes in the inbox", "Anita cleared L1 with rating 4, schedule L2 on 2026-10-12 at 11:00",
+              "What follow-ups are due this week?"])
+
+SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT)}
 
 
 # ---------------------------------------------------------------- rules-only plans (no model)
@@ -202,4 +215,67 @@ def plan_screening(run, request):
     return rules_crew(run, request)
 
 
-PLANS = {"policy": plan_policy, "leave": plan_leave, "onboarding": plan_onboarding, "screening": plan_screening}
+ROUND = r"(L\d+|HR|Final)"
+
+
+def _find_candidate(text):
+    for c in db.q("SELECT id, name FROM candidates"):
+        if re.search(rf"\b{re.escape(c['id'])}\b", text, re.I) or c["name"].lower() in text.lower() \
+                or re.search(rf"\b{re.escape(c['name'].split()[0])}\b", text, re.I):
+            return c
+    return None
+
+
+def plan_recruitment(run, request):
+    """Rules-only understanding of common pipeline requests; anything else gets the pipeline summary."""
+    t = request.lower()
+    if re.search(r"inbox|folder|new resumes|ingest|upload", t):
+        r = run.call("ingest_resumes")
+        if "error" in r:
+            return r["error"]
+        lines = [f"Read {len(r['added'])} new resume(s)."] + [f"- {a['name']} ({a['candidate_id']}): {a['stage']}, score {a['score']}"
+                                                             for a in r["added"]]
+        lines += [f"Duplicate: {d}" for d in r["duplicates"]] + [f"Unreadable: {u}" for u in r["unreadable"]]
+        lines += [f"No job folder for: {n} (put it under inbox/<JOB-ID>/)" for n in r["no_job"]]
+        return "\n".join(lines)
+    if "follow" in t:
+        fs = run.call("list_followups", days_ahead=7)["followups"]
+        return "\n".join(f"#{f['id']} {f['due']} {f['name']}: {f['note']}" for f in fs) or "No follow-ups due in the next 7 days."
+    c = _find_candidate(request)
+    rnd = re.search(ROUND, request, re.I)
+    rnd = rnd.group(1).upper() if rnd and rnd.group(1).lower() != "final" else ("Final" if rnd else None)
+    if c and rnd and re.search(r"\b(pass|passed|cleared|cleared|selected in|fail|failed|rejected in|hold)\b", t):
+        result = "fail" if re.search(r"\bfail|rejected", t) else "hold" if "hold" in t else "pass"
+        rating = re.search(r"rating\s*(\d)", t)
+        out = run.call("record_interview_result", candidate=c["id"], round_name=rnd, result=result,
+                       rating=int(rating.group(1)) if rating else 0, feedback=request)
+        if "error" in out:
+            return out["error"]
+        msg = f"Recorded {rnd} {result} for {c['name']}. Stage: {out['stage']}" + (f", next round {out['next_round']}" if out.get("next_round") else "") + "."
+        when = re.search(r"(\d{4}-\d{2}-\d{2})(?:[ T]at\s*|[ T])?(\d{1,2}:\d{2})?", request)
+        if out.get("next_round") and "schedule" in t and when:
+            s = run.call("schedule_interview", candidate=c["id"], round_name=out["next_round"],
+                         when=f"{when.group(1)}T{(when.group(2) or '11:00').zfill(5)}")
+            msg += f" {out['next_round']} scheduled for {s.get('scheduled_at', '?')}." if "error" not in s else f" {s['error']}"
+        return msg
+    if c and "schedule" in t:
+        when = re.search(r"(\d{4}-\d{2}-\d{2})(?:[ T]at\s*|[ T])?(\d{1,2}:\d{2})?", request)
+        s = run.call("schedule_interview", candidate=c["id"], round_name=rnd or "",
+                     when=f"{when.group(1)}T{(when.group(2) or '11:00').zfill(5)}" if when else "")
+        return s.get("error") or f"{s['round']} for {c['name']} scheduled at {s['scheduled_at']}; invite drafted."
+    if c and re.search(r"accept", t):
+        out = run.call("record_offer_response", candidate=c["id"], accepted=True)
+        return out.get("error") or f"{c['name']} accepted; new hire {out['new_hire_id']} joining {out['joining_date']}. Onboarding started."
+    if c and re.search(r"joined", t):
+        out = run.call("mark_joined", candidate=c["id"])
+        return out.get("error") or f"{c['name']} marked as joined."
+    if c:
+        tl = run.call("candidate_timeline", candidate=c["id"])
+        cand = tl["candidate"]
+        return (f"{cand['name']} ({cand['id']}): {cand['stage']}. {cand.get('status_note') or ''} Next round: "
+                f"{tl['next_round'] or 'none'}. Last update {cand['updated_at']}.")
+    return run.call("pipeline_summary")["summary"]
+
+
+PLANS = {"policy": plan_policy, "leave": plan_leave, "onboarding": plan_onboarding, "screening": plan_screening,
+         "recruitment": plan_recruitment}

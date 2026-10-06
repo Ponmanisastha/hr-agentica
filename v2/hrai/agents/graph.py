@@ -43,6 +43,9 @@ def recall_node(state: State):
 
 def keyword_route(text):
     t = text.lower()
+    if re.search(r"inbox|folder|pipeline|interview|\bround\b|\bl\d+\b|\bhr round|final round|offer|joining date|joined|"
+                 r"follow[- ]?ups?|hiring status|candidate status|cleared|ingest", t):
+        return "recruitment"
     if re.search(r"resume|\bcv\b|candidate|screen|shortlist|applicant", t):
         return "screening"
     if re.search(r"onboard|new hire|joining|joiner|nh-\d", t):

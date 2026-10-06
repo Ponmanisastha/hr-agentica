@@ -10,6 +10,7 @@
   python app.py triggers list | run | fire NAME
   python app.py tickets list | show ID | work [ID] | approve ID | reject ID [--note TEXT] | sync
   python app.py budget [show] | budget set AGENT USD [--on-exceed downgrade|block]
+  python app.py hiring ingest [--job JOB-101] | board | followups | rounds JOB-101 L1 L2 L3 HR Final | sample
   python app.py index                      rebuild vectors and the knowledge graph
   python app.py a2a send URL "<text>" --token T   call any A2A agent
 """
@@ -86,6 +87,16 @@ def demo():
     for t in tracker.list_tickets("awaiting_approval"):
         print(f"  #{t['id']} waits for a human: python app.py tickets show {t['id']}  then  tickets approve {t['id']}")
     print("=" * 78)
+    print("HIRING PIPELINE: sample resumes dropped into the inbox, then moved through the rounds")
+    import shutil
+    from hrai import hiring
+    shutil.copytree(config.DATA / "sample_inbox", hiring.inbox_root(), dirs_exist_ok=True)
+    for r in ["Read the new resumes in the inbox",
+              f"Schedule Divya Krishnan for L1 on {nxt(2)} at 11:00",
+              f"Divya cleared L1 with rating 4, schedule the next round on {nxt(4)} at 15:00",
+              "What is the hiring pipeline status?"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
     print("BUDGET:", json.dumps(llm.budget_report()["total"]))
     print("Drafted emails:", db.q1("SELECT COUNT(*) AS n FROM outbox")["n"], " Pending approvals:",
           db.q1("SELECT COUNT(*) AS n FROM approvals WHERE status='pending'")["n"])
@@ -105,6 +116,7 @@ def main(argv):
     p.add_argument("--on-exceed", default="downgrade")
     p.add_argument("--token")
     p.add_argument("--demo-users", action="store_true")
+    p.add_argument("--job", default="")
     a = p.parse_args(argv)
     cmd, args = a.cmd, a.args
 
@@ -200,6 +212,28 @@ def main(argv):
         if args[:1] == ["set"]:
             llm.set_budget(args[1], float(args[2]), a.on_exceed)
         print(json.dumps(llm.budget_report(), indent=2))
+    elif cmd == "hiring":
+        from hrai import hiring
+        from hrai import tools as T
+        sub = args[0] if args else "board"
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "sample":  # copy the sample resumes into the inbox
+                import shutil
+                src = config.DATA / "sample_inbox"
+                shutil.copytree(src, hiring.inbox_root(), dirs_exist_ok=True)
+                print(f"Copied sample resumes into {hiring.inbox_root()}; now run: python app.py hiring ingest")
+            elif sub == "ingest":
+                print(json.dumps(T.run("ingest_resumes", job_id=a.job), indent=2, default=str))
+            elif sub == "followups":
+                for f in hiring.followups(14):
+                    print(f"#{f['id']:<4} {f['due']}  {f['name']:20} {f['note']}")
+            elif sub == "rounds":
+                print(hiring.set_rounds(args[1], args[2:]))
+            else:
+                print(hiring.summary(a.job or None))
+        finally:
+            auth._current.reset(token)
     elif cmd == "index":
         from hrai.knowledge import kag, vectors
         print(vectors.index_all(), kag.build())

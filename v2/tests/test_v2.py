@@ -1,7 +1,6 @@
 """End-to-end tests. Offline: no API key, no Ollama, hash embeddings. Run: python -m unittest discover -s tests -t ."""
 
 import json
-import warnings
 import os
 import shutil
 import subprocess
@@ -15,11 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-warnings.simplefilter("ignore", ResourceWarning)
-HOME = tempfile.mkdtemp(prefix="hrai-test-")
-os.environ.update(HRAI_HOME=HOME, HRAI_MODE="mock", HRAI_EMBEDDINGS="hash", HRAI_TODAY="2026-10-06")
-os.environ.pop("ANTHROPIC_API_KEY", None)
-os.environ.pop("HRAI_GITHUB_REPO", None)
+from tests.common import ADMIN, HOME, as_user, bootstrap  # noqa: E402  (sets the offline test environment first)
 
 from hrai import a2a, auth, automations, config, db, hooks, triggers  # noqa: E402
 from hrai import tools as T  # noqa: E402
@@ -28,30 +23,9 @@ from hrai.gateway import llm  # noqa: E402
 from hrai.knowledge import cag, kag, mag, vectors  # noqa: E402
 from hrai.ops import ticket_agent, tracker  # noqa: E402
 
-ADMIN = auth.User(0, "tester", "admin")
-
 
 def setUpModule():
-    db.init_db()
-    tracker.install()
-    vectors.index_all()
-    kag.build()
-    auth.create_user("hr1", "hr-password-1", "hr")
-    auth.create_user("deepa", "deepa-password", "employee", "E101")
-
-
-def tearDownModule():
-    shutil.rmtree(HOME, ignore_errors=True)
-
-
-def as_user(user):
-    class Ctx:
-        def __enter__(self):
-            self.t = auth.set_current_user(user)
-
-        def __exit__(self, *a):
-            auth._current.reset(self.t)
-    return Ctx()
+    bootstrap()
 
 
 class AuthTests(unittest.TestCase):
@@ -91,7 +65,7 @@ class AgentTests(unittest.TestCase):
     def test_screening_crew(self):
         out = G.handle("Screen all resumes for the Backend Engineer opening and shortlist", user=ADMIN)
         self.assertEqual(out["agent"], "screening")
-        self.assertEqual(db.q1("SELECT COUNT(*) AS n FROM candidates WHERE decision='shortlist'")["n"], 3)
+        self.assertEqual(db.q1("SELECT COUNT(*) AS n FROM candidates WHERE decision='shortlist' AND job_id='JOB-101'")["n"], 3)
         self.assertTrue(any(s["agent"] == "fairness_reviewer" for s in out["trace"]))
 
     def test_onboarding_uses_a2a_for_policy(self):
@@ -259,7 +233,7 @@ class TicketWorkflowTests(unittest.TestCase):
         # Same layout as the real repository: the app sits in a v2/ subfolder of the git repo.
         cls.top = Path(tempfile.mkdtemp(prefix="hrai-repo-"))
         cls.repo = cls.top / "v2"
-        shutil.copytree(config.ROOT, cls.repo, ignore=shutil.ignore_patterns(".git", "var", "__pycache__", ".venv", "*.zip"))
+        shutil.copytree(config.ROOT, cls.repo, ignore=shutil.ignore_patterns(".git", "var", "inbox", "__pycache__", ".venv", "*.zip"))
         subprocess.run(["git", "init", "-q", "-b", "main"], cwd=cls.top, check=True)
         subprocess.run(["git", "add", "-A"], cwd=cls.top, check=True)
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init"], cwd=cls.top, check=True)
@@ -337,7 +311,7 @@ class ProtocolTests(unittest.TestCase):
     def test_a2a_card_and_message(self):
         code, card, _ = self.req("/.well-known/agent-card.json")
         self.assertEqual(code, 200)
-        self.assertEqual({s["id"] for s in card["skills"]}, {"policy", "leave", "onboarding", "screening"})
+        self.assertEqual({s["id"] for s in card["skills"]}, {"policy", "leave", "onboarding", "screening", "recruitment"})
         client = a2a.A2AClient(self.token)
         task, answer = a2a.answer_of(client.send(self.base + "/a2a/policy", "How long is paternity leave?"))
         self.assertEqual(task["status"]["state"], "completed")

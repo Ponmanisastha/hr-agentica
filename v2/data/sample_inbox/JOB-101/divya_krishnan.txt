@@ -1,0 +1,5 @@
+Divya Krishnan
+divya.k@example.com | +91 98400 11223
+6 years experience as a backend engineer.
+Skills: Python, FastAPI, SQL, PostgreSQL, REST API design, Docker, Kubernetes, AWS
+2021-2026 Lead Engineer, ShopKart: payments and order REST APIs on AWS.

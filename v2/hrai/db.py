@@ -63,7 +63,35 @@ CREATE TABLE IF NOT EXISTS ticket_events (id INTEGER PRIMARY KEY, ticket_id INTE
 CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY, ts TEXT, username TEXT, request TEXT, answer TEXT, rating INTEGER, comment TEXT, ticket_id INTEGER);
 CREATE TABLE IF NOT EXISTS trigger_runs (id INTEGER PRIMARY KEY, name TEXT, ts TEXT, status TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS interviews (
+    id INTEGER PRIMARY KEY, candidate_id TEXT, job_id TEXT, round TEXT, scheduled_at TEXT, interviewer TEXT,
+    mode TEXT, status TEXT DEFAULT 'scheduled', result TEXT, rating INTEGER, feedback TEXT, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS candidate_events (
+    id INTEGER PRIMARY KEY, candidate_id TEXT, ts TEXT, actor TEXT, event TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS offers (
+    id INTEGER PRIMARY KEY, candidate_id TEXT, job_id TEXT, ctc_lpa REAL, joining_date TEXT, status TEXT,
+    approval_id INTEGER, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS followups (
+    id INTEGER PRIMARY KEY, candidate_id TEXT, due TEXT, kind TEXT, note TEXT, status TEXT DEFAULT 'open',
+    created_at TEXT, done_at TEXT);
 """
+
+# Columns added after the first release; init_db adds any that an older database is missing.
+MIGRATIONS = {
+    "candidates": {"phone": "TEXT", "skills": "TEXT", "years": "INTEGER", "file_hash": "TEXT", "source_path": "TEXT",
+                   "stage": "TEXT DEFAULT 'applied'", "status_note": "TEXT", "created_at": "TEXT"},
+    "jobs": {"rounds": "TEXT", "select_threshold": "INTEGER DEFAULT 70", "status": "TEXT DEFAULT 'open'"},
+    "new_hires": {"candidate_id": "TEXT"},
+}
+
+
+def _migrate():
+    for table, cols in MIGRATIONS.items():
+        have = {r["name"] for r in q(f"PRAGMA table_info({table})")}
+        for col, ddl in cols.items():
+            if col not in have:
+                conn().execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+    conn().commit()
 
 
 def now():
@@ -105,6 +133,7 @@ def audit(username, action, detail=None):
 
 def init_db(seed=True):
     conn().executescript(SCHEMA)
+    _migrate()
     for agent, amount in config.DEFAULT_BUDGETS.items():
         amount = float(config.env(f"HRAI_BUDGET_{agent.upper()}", amount))
         x("INSERT OR IGNORE INTO budgets (agent, monthly_usd) VALUES (?,?)", (agent, amount))
@@ -121,11 +150,14 @@ def seed_sample_data():
           (e["id"], e["name"], e["email"], e.get("department"), e.get("level"), e["manager"],
            e["manager_email"], b["annual"], b["sick"], b["casual"]))
     for j in json.loads((D / "job_openings.json").read_text(encoding="utf-8")):
-        x("INSERT OR REPLACE INTO jobs VALUES (?,?,?,?,?,?,?)",
+        x("INSERT OR REPLACE INTO jobs (id, title, location, min_years, must_have, nice_to_have, shortlist_size) "
+          "VALUES (?,?,?,?,?,?,?)",
           (j["id"], j["title"], j["location"], j["min_years"], json.dumps(j["must_have"]),
            json.dumps(j["nice_to_have"]), j["shortlist_size"]))
+        x("UPDATE jobs SET rounds=? WHERE id=?", (json.dumps(j.get("rounds", ["L1", "L2", "HR", "Final"])), j["id"]))
     for h in json.loads((D / "new_hires.json").read_text(encoding="utf-8")):
-        x("INSERT OR REPLACE INTO new_hires VALUES (?,?,?,?,?,?,?,?)",
+        x("INSERT OR REPLACE INTO new_hires (id, name, email, role, department, manager, start_date, documents) "
+          "VALUES (?,?,?,?,?,?,?,?)",
           (h["id"], h["name"], h["email"], h["role"], h["department"], h["manager"], h["start_date"],
            json.dumps(h["documents_submitted"])))
     for d in json.loads((D / "holidays.json").read_text(encoding="utf-8")):
@@ -135,7 +167,7 @@ def seed_sample_data():
         text = path.read_text(encoding="utf-8")
         name = re.search(r"^name:\s*(.+)$", text, re.M | re.I)
         email = re.search(r"^email:\s*(.+)$", text, re.M | re.I)
-        x("INSERT OR REPLACE INTO candidates (id, file_name, name, email, resume_text, job_id, updated_at) "
-          "VALUES (?,?,?,?,?,?,?)",
+        x("INSERT OR REPLACE INTO candidates (id, file_name, name, email, resume_text, job_id, updated_at, stage, "
+          "created_at) VALUES (?,?,?,?,?,?,?,?,?)",
           (f"C-{i:03d}", path.name, name.group(1).strip() if name else path.stem,
-           email.group(1).strip() if email else None, text, job["id"] if job else None, now()))
+           email.group(1).strip() if email else None, text, job["id"] if job else None, now(), "applied", now()))

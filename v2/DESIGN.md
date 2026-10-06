@@ -134,7 +134,27 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 - The server binds to 127.0.0.1 unless `HRAI_HOST` is set. Secrets live in `.env`, which git ignores.
 - No email is ever sent. Leave exceptions, code fixes and knowledge additions all need a human decision.
 
-## 9. Phases
+## 9. Hiring pipeline (added in the HR suite, phase 1)
+
+`hrai/hiring.py`, the **recruitment agent**, 12 tools, the Hiring tab and three triggers.
+
+- **Inbox.** `inbox/<JOB-ID>/` takes .pdf (pypdf), .docx (read directly from the file's XML), .txt and .md. A file
+  is read once (SHA-256 of its bytes); a second resume with the same email for the same job is reported as a duplicate.
+  Name, email, phone, years and skills are pulled out with rules.
+- **Screening.** rejected = misses a must-have or the minimum years; selected = score at or above the job's
+  threshold (default 70); on hold = meets the minimum but scores lower, so HR decides. A copy of the file goes to
+  `sorted/<stage>/`.
+- **Rounds.** Each job stores its own ordered list of rounds (L1..Ln, HR, Final). Passing a round moves the candidate
+  to the next one; passing the last makes them ready for an offer. Fail rejects them (a regret email is drafted); hold
+  parks them.
+- **Offer and joining.** An offer request goes to the approvals queue; the offer email is drafted only after
+  approval. Acceptance creates the new hire, which starts the onboarding plan through the `new_hire.created` trigger,
+  and adds follow-ups at -7, -3, 0, +30 and +90 days from joining.
+- **Tracking.** `candidate_events` is each candidate's timeline; `followups` holds what is due.
+- **Triggers.** `inbox_watch` (every 2 minutes), `hiring_followups` (08:30: HR digest and next-day interview
+  reminders), `stale_candidates` (10:00: anyone stuck 5+ days gets a follow-up).
+
+## 10. Phases
 
 | Phase | Content | Status |
 | --- | --- | --- |
@@ -143,12 +163,15 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 | 3 | LangGraph orchestrator, LangChain tools, screening crew, hooks, skills | Done |
 | 4 | MCP server, A2A, triggers, web console | Done |
 | 5 | Ticket tracker and auto-fix agent with PRs and human approval | Done |
-| 6 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Next |
-| 7 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
+| 6 | Hiring pipeline: resume inbox, screening, L1..Ln/HR/Final rounds, offers, joining, follow-ups | Done (HR suite phase 1) |
+| 7 | Insights and analytics dashboard; UI redesign | Next |
+| 8 | Salary management (Indian payroll), project management, events and HR activities | Planned |
+| 9 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Later |
+| 10 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
 
-## 10. What was tested, and what was not
+## 11. What was tested, and what was not
 
-**Tested (28 automated tests on Python 3.14.6, offline):**
+**Tested (36 automated tests on Python 3.14.6, offline):**
 - Login, hashing, lockout and roles
 - All four agents in rules-only mode
 - The LLM tool loop with a scripted model response
@@ -160,6 +183,8 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 - Web login and permissions
 - MCP tools filtered by role
 - Triggers
+- The hiring pipeline: .pdf, .docx and .txt resumes, sorting, duplicates, a five-round journey to offer approval,
+  joining and follow-ups, fail and hold, the web upload, and the triggers
 - The full ticket workflow (gap → patch → worktree tests → review → approve → merge → closed, plus the reject and needs-human paths) in a repo where the app sits in a subfolder
 
 **Also checked by hand:** the MCP server over stdio with a real MCP client, the CrewAI wiring on Python 3.13 (crew assembly and tools, with the model call mocked), and MiniLM semantic search.

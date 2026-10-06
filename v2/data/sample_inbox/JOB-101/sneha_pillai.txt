@@ -1,0 +1,4 @@
+Name: Sneha Pillai
+Email: sneha.pillai@example.com
+2 years experience in frontend development.
+Skills: JavaScript, React, TypeScript, Figma

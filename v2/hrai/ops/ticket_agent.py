@@ -222,6 +222,11 @@ def propose_fix(state: TState):
 def test(state: TState):
     tid = state["ticket_id"]
     wt, branch = worktree(tid), f"ticket/{tid}"
+    # A stale worktree may still hold this branch (an earlier run, or another HRAI_HOME): free it first.
+    listing = git("worktree", "list", "--porcelain", check=False).split("\n\n")
+    for block in listing:
+        if f"branch refs/heads/{branch}" in block:
+            git("worktree", "remove", "--force", block.split("\n")[0].removeprefix("worktree "), check=False)
     if wt.exists():
         git("worktree", "remove", "--force", str(wt), check=False)
     git("branch", "-D", branch, check=False)
@@ -408,8 +413,12 @@ def work(ticket_id):
         return {"ticket_id": ticket_id, "status": t["status"] if t else "missing"}
     reset = auth.set_current_user(auth.User(0, ACTOR, "service"))
     try:
-        with _Graph() as g:
-            g.invoke({"ticket_id": ticket_id}, config=_cfg(ticket_id))
+        try:
+            with _Graph() as g:
+                g.invoke({"ticket_id": ticket_id}, config=_cfg(ticket_id))
+        except Exception as exc:  # e.g. git not installed or the repo is in a bad state: hand it to a person
+            tracker.update(ticket_id, ACTOR, "needs_human", status="needs_human",
+                           resolution=f"Ticket agent could not continue: {type(exc).__name__}: {str(exc)[:300]}")
     finally:
         auth._current.reset(reset)
     return {"ticket_id": ticket_id, "status": tracker.get(ticket_id)["status"]}
