@@ -144,6 +144,7 @@ class ProjectWebTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()
 
     def call(self, path, token, body=None):
         r = urllib.request.Request(self.base + path, data=json.dumps(body).encode() if body is not None else None,
@@ -152,7 +153,8 @@ class ProjectWebTests(unittest.TestCase):
             with urllib.request.urlopen(r) as resp:
                 return resp.status, json.loads(resp.read())
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read())
+            with e:
+                return e.code, json.loads(e.read())
 
     def test_api_and_roles(self):
         mgr = auth.login("mgr1", "manager-password-1")

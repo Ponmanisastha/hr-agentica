@@ -313,6 +313,7 @@ class ProtocolTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()
 
     def req(self, path, body=None, token=None):
         r = urllib.request.Request(self.base + path, data=json.dumps(body).encode() if body is not None else None,
@@ -321,7 +322,8 @@ class ProtocolTests(unittest.TestCase):
             with urllib.request.urlopen(r) as resp:
                 return resp.status, json.loads(resp.read()), resp.headers
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read()), e.headers
+            with e:
+                return e.code, json.loads(e.read()), e.headers
 
     def test_a2a_card_and_message(self):
         code, card, _ = self.req("/.well-known/agent-card.json")
