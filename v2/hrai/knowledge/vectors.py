@@ -88,26 +88,50 @@ def upsert(name, docs):
 
 KEYWORD_WEIGHT = 0.5 if config.env("HRAI_EMBEDDINGS", "auto") == "hash" else 0.15
 STOP = set("the a an of for to is in and how many what do i my can get on we me much are does take our there who "
-           "which with by be it this that you your".split())
+           "which with by be it this that you your when where why".split())
+
+
+def _stem(word):
+    """Rough English stemming so 'harasses', 'harassment' and 'harass' meet: plural s, then one suffix."""
+    word = word.rstrip("s")
+    for suffix in ("ment", "ing", "ed", "e"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 4:
+            return word[:-len(suffix)]
+    return word
+
+
+SYNONYMS = {r"\bwfh\b": "work from home", r"\bpto\b": "annual leave", r"\bctc\b": "cost to company",
+            r"\bf&f\b|\bfnf\b": "full and final settlement", r"\bta/da\b": "travel daily allowance"}
+
+
+def expand(query):
+    """Spell out common HR abbreviations so they match the wording of the documents."""
+    for pattern, words in SYNONYMS.items():
+        query = re.sub(pattern, words, query, flags=re.I)
+    return query
 
 
 def _keywords(text):
-    return {w.rstrip("s") for w in re.findall(r"[a-z]+", text.lower()) if w not in STOP and len(w) > 2}
+    return {_stem(w) for w in re.findall(r"[a-z]+", text.lower()) if w not in STOP and len(w) > 2}
 
 
 def search(name, query, k=3, where=None):
-    """Hybrid search: vector similarity from Chroma, re-ranked with keyword overlap (titles count double)."""
+    """Hybrid search: vector similarity from Chroma, re-ranked by how many of the question's words the section
+    has (a word in the section title counts one and a half)."""
     embed, _ = _embedder()
+    query = expand(query)
     col = collection(name)
     n = col.count()
     if n == 0:
         return []
-    res = col.query(query_embeddings=embed([query]), n_results=min(max(k * 4, 10), n), where=where)
+    # score up to 100 candidates: with a few hundred sections that is most of them, so a section the keywords
+    # point at is not lost just because the embedding ranked it low (the offline hash embedding often does)
+    res = col.query(query_embeddings=embed([query]), n_results=min(max(k * 4, 100), n), where=where)
     q = _keywords(query)
     hits = []
     for i, t, m, d in zip(res["ids"][0], res["documents"][0], res["metadatas"][0], res["distances"][0]):
         title = _keywords(t.split("\n", 1)[0])
-        overlap = (len(q & _keywords(t)) + len(q & title)) / (len(q) or 1)
+        overlap = (len(q & _keywords(t)) + 0.5 * len(q & title)) / (len(q) or 1)
         hits.append({"id": i, "text": t, "meta": m, "score": round((1 - d) + KEYWORD_WEIGHT * overlap, 3)})
     return sorted(hits, key=lambda h: -h["score"])[:k]
 

@@ -16,6 +16,8 @@
   python app.py culture [summary] | calendar | kudos | awards | pulse    events, recognition and pulse
   python app.py insights [--job JOB-101] | attention | report | csv     HR analytics; csv prints the pipeline
   python app.py policies [list] | add FILE... | reindex    your HR policy documents (policies/ folder)
+  python app.py samples [load]             load the sample pack: policies, resumes, employees, leave, salaries
+  python app.py knowledge rag|cag|kag "<question>" | kag rules | mag USER    see what each knowledge layer returns
   python app.py index                      rebuild vectors and the knowledge graph
   python app.py a2a send URL "<text>" --token T   call any A2A agent
 """
@@ -363,6 +365,50 @@ def main(argv):
             print(f"  {d['name']}: {len(d['sections'])} sections")
             for sec in d["sections"]:
                 print(f"     - {sec}")
+    elif cmd == "knowledge":
+        from hrai.knowledge import cag, kag, mag, vectors
+        sub, q = (args[0] if args else ""), " ".join(args[1:])
+        if sub == "rag":
+            for h in vectors.search("policy", q, k=3):
+                body = " ".join(h["text"].split("\n", 1)[-1].split())
+                print(f"{h['score']:.3f}  {h['meta']['source']}, section {h['meta']['section']}\n       {body[:160]}")
+        elif sub == "cag":
+            ctx = cag.policy_context(q or "policy")
+            print(f"Strategy: {ctx['strategy'].upper()}  (all policy text is {len(vectors.handbook_text()):,} characters; "
+                  f"CAG is used up to HRAI_CAG_MAX_CHARS={cag.max_chars():,})")
+            print(f"Knowledge-base version: {ctx['kb_hash']}  (cached answers are dropped when it changes)")
+            if q:
+                row = db.q1("SELECT answer, hits FROM answer_cache WHERE key=? AND kb_hash=?", (cag._key(q), ctx["kb_hash"]))
+                print("Cached answer for this question:",
+                      f"{row['answer'][:200]}... (reused {row['hits']} times)" if row else "none yet (ask it once)")
+                if not cag.is_generic(q):
+                    print("Personal questions (I, my, an employee id or a date) are never cached.")
+        elif sub == "kag" and q == "rules":
+            for r in kag.rules():
+                print(f"  {r['rule']:<45} {str(r['value']):>6}   {r['source'] or 'DEFAULT (not found in your documents)'}")
+        elif sub == "kag":
+            for f in kag.facts_for(q)[:15]:
+                print(f"  {f['subject']} --{f['predicate']}--> {f['object']}   [{f['source']}]")
+        elif sub == "mag":
+            for m in db.q("SELECT kind, text, ts FROM memories WHERE username=? ORDER BY id DESC LIMIT 10", (q.lower(),)):
+                print(f"  {m['ts']}  [{m['kind']}] {m['text'][:150]}")
+        else:
+            print('Usage: python app.py knowledge rag|cag|kag "<question>" | knowledge kag rules | knowledge mag USER')
+    elif cmd == "samples":
+        from hrai import samples
+        if args[:1] != ["load"]:
+            print(f"Sample pack in {samples.ROOT}: policies/, resumes/, data/. Load it with: python app.py samples load")
+            return
+        token = auth.set_current_user(cli_user())
+        try:
+            out = samples.load()
+        finally:
+            auth._current.reset(token)
+        print(f"Employees added: {len(out['employees_added'])}  past leave records: {out['leave_records_added']}  "
+              f"openings: {', '.join(out['jobs_added']) or 'none new'}  salaries: {len(out['salaries_added'])}")
+        print(f"Policy documents copied: {len(out['policies_copied'])}  resumes copied to the inbox: {len(out['resumes_copied'])}")
+        print(f"Indexed {out['index']['policy_sections']} policy sections; knowledge graph has {out['index']['kg_triples']} facts.")
+        print("Next: python app.py hiring ingest   (reads the resumes into the pipeline and screens them)")
     elif cmd == "a2a":
         from hrai import a2a
         client = a2a.A2AClient(a.token or config.env("HRAI_A2A_TOKEN"))

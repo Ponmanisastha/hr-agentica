@@ -358,10 +358,11 @@ def risks():
     for p in board("active"):
         gap = staffing_gap(p["id"])
         if gap["gaps"]:
-            who = ", ".join(x["name"] for x in gap["suggestions"][:2])
+            names = [x["name"] for x in gap["suggestions"][:2]]
+            who = " and ".join(names) + (" is free and has it" if len(names) == 1 else " are free and have it")
             out.append({"kind": "skill_gap", "project_id": p["id"], "project": p["name"], "severity": "warning",
                         "text": f"Nobody on {p['name']} has {', '.join(gap['gaps'])}" +
-                                (f"; {who} is free and has it" if who else "; consider hiring or training")})
+                                (f"; {who}" if names else "; consider hiring or training")})
     soon = (today + timedelta(days=14)).isoformat()
     for a in db.q("SELECT a.*, e.name, p.name AS project FROM allocations a JOIN employees e ON e.id=a.employee_id "
                   "JOIN projects p ON p.id=a.project_id WHERE a.status='active' AND a.end_date BETWEEN ? AND ?",
@@ -378,19 +379,15 @@ def staffing_gap(project_ref):
         return {"project_id": p["id"], "needed": [], "gaps": [], "suggestions": []}
     on = {t["employee_id"] for t in team(p["id"]) if t["current"]}
     free = {c["id"]: c for c in capacity() if c["free_pct"] >= 20}
-    have, suggestions = set(), []
-    for e in db.q("SELECT id, name FROM employees"):
-        skills = {s.lower() for s in json.loads(db.q1("SELECT COALESCE(skills,'[]') AS s FROM employees WHERE id=?",
-                                                     (e["id"],))["s"] or "[]")}
-        match = [s for s in p["skills"] if s.lower() in skills]
-        if not match:
-            continue
-        if e["id"] in on:
-            have.update(match)
-        elif e["id"] in free:
-            suggestions.append({"employee_id": e["id"], "name": e["name"], "skills": match,
-                                "free_pct": free[e["id"]]["free_pct"]})
+    skills_of = {e["id"]: (e["name"], {s.lower() for s in json.loads(e["skills"] or "[]")})
+                 for e in db.q("SELECT id, name, skills FROM employees")}
+    have = {s for eid in on if eid in skills_of for s in p["skills"] if s.lower() in skills_of[eid][1]}
     gaps = [s for s in p["skills"] if s not in have]
+    suggestions = []  # free people who have a skill the team is missing (not just any skill the project uses)
+    for eid, (name, skills) in skills_of.items():
+        match = [s for s in gaps if s.lower() in skills]
+        if match and eid not in on and eid in free:
+            suggestions.append({"employee_id": eid, "name": name, "skills": match, "free_pct": free[eid]["free_pct"]})
     return {"project_id": p["id"], "project": p["name"], "needed": p["skills"], "gaps": gaps,
             "suggestions": sorted(suggestions, key=lambda s: -s["free_pct"])[:5]}
 

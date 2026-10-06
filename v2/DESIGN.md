@@ -256,7 +256,7 @@ morning, `event_wrap_up` in the evening).
 
 ## 15. What was tested, and what was not
 
-**Tested (96 automated tests on Python 3.14.6, offline):**
+**Tested (104 automated tests on Python 3.14.6, offline):**
 - Login, hashing, lockout and roles
 - All four agents in rules-only mode
 - The LLM tool loop with a scripted model response

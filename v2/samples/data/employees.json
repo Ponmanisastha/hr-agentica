@@ -1,0 +1,320 @@
+[
+  {
+    "id": "E101",
+    "name": "Deepa Nair",
+    "manager": "Arun Kumar",
+    "leave_balance": {
+      "annual": 12,
+      "sick": 6,
+      "casual": 4
+    },
+    "email": "deepa.nair@example.com",
+    "manager_email": "arun.kumar@example.com",
+    "department": "Engineering",
+    "level": "L2",
+    "skills": [
+      "python",
+      "sql",
+      "rest api",
+      "django"
+    ],
+    "date_of_birth": "1994-10-18",
+    "joined_on": "2023-02-01"
+  },
+  {
+    "id": "E102",
+    "name": "Sanjay Patel",
+    "manager": "Arun Kumar",
+    "leave_balance": {
+      "annual": 2,
+      "sick": 5,
+      "casual": 1
+    },
+    "email": "sanjay.patel@example.com",
+    "manager_email": "arun.kumar@example.com",
+    "department": "Engineering",
+    "level": "L3",
+    "skills": [
+      "java",
+      "spring",
+      "kubernetes",
+      "sql"
+    ],
+    "date_of_birth": "1990-11-02",
+    "joined_on": "2021-07-19"
+  },
+  {
+    "id": "E103",
+    "name": "Lakshmi Menon",
+    "manager": "Ravi Shankar",
+    "leave_balance": {
+      "annual": 18,
+      "sick": 8,
+      "casual": 3
+    },
+    "email": "lakshmi.menon@example.com",
+    "manager_email": "ravi.shankar@example.com",
+    "department": "Human Resources",
+    "level": "L4",
+    "skills": [
+      "recruitment",
+      "payroll",
+      "employee relations"
+    ],
+    "date_of_birth": "1988-10-09",
+    "joined_on": "2019-04-15"
+  },
+  {
+    "id": "E104",
+    "name": "Arun Kumar",
+    "manager": "Ravi Shankar",
+    "leave_balance": {
+      "annual": 13,
+      "sick": 7,
+      "casual": 6
+    },
+    "email": "arun.kumar@example.com",
+    "manager_email": "ravi.shankar@example.com",
+    "department": "Engineering",
+    "level": "L5",
+    "skills": [
+      "python",
+      "java",
+      "kubernetes",
+      "people management"
+    ],
+    "date_of_birth": "1985-03-12",
+    "joined_on": "2017-06-05"
+  },
+  {
+    "id": "E105",
+    "name": "Ravi Shankar",
+    "manager": "Meenakshi Sundaram",
+    "leave_balance": {
+      "annual": 8,
+      "sick": 8,
+      "casual": 6
+    },
+    "email": "ravi.shankar@example.com",
+    "manager_email": "meenakshi.sundaram@example.com",
+    "department": "Leadership",
+    "level": "L6",
+    "skills": [
+      "strategy",
+      "finance"
+    ],
+    "date_of_birth": "1979-08-21",
+    "joined_on": "2015-01-12"
+  },
+  {
+    "id": "E106",
+    "name": "Karthik Subramanian",
+    "manager": "Arun Kumar",
+    "leave_balance": {
+      "annual": 13,
+      "sick": 5,
+      "casual": 4
+    },
+    "email": "karthik.subramanian@example.com",
+    "manager_email": "arun.kumar@example.com",
+    "department": "Engineering",
+    "level": "L2",
+    "skills": [
+      "python",
+      "fastapi",
+      "postgresql",
+      "docker"
+    ],
+    "date_of_birth": "1996-12-03",
+    "joined_on": "2024-01-08"
+  },
+  {
+    "id": "E107",
+    "name": "Ananya Iyer",
+    "manager": "Arun Kumar",
+    "leave_balance": {
+      "annual": 18,
+      "sick": 8,
+      "casual": 5
+    },
+    "email": "ananya.iyer@example.com",
+    "manager_email": "arun.kumar@example.com",
+    "department": "Engineering",
+    "level": "L1",
+    "skills": [
+      "javascript",
+      "react",
+      "node"
+    ],
+    "date_of_birth": "2000-10-27",
+    "joined_on": "2025-07-14"
+  },
+  {
+    "id": "E108",
+    "name": "Vignesh Babu",
+    "manager": "Arun Kumar",
+    "leave_balance": {
+      "annual": 3,
+      "sick": 8,
+      "casual": 5
+    },
+    "email": "vignesh.babu@example.com",
+    "manager_email": "arun.kumar@example.com",
+    "department": "Engineering",
+    "level": "L2",
+    "skills": [
+      "selenium",
+      "python",
+      "ci/cd"
+    ],
+    "date_of_birth": "1995-05-30",
+    "joined_on": "2022-09-19"
+  },
+  {
+    "id": "E109",
+    "name": "Fathima Begum",
+    "manager": "Lakshmi Menon",
+    "leave_balance": {
+      "annual": 18,
+      "sick": 6,
+      "casual": 6
+    },
+    "email": "fathima.begum@example.com",
+    "manager_email": "lakshmi.menon@example.com",
+    "department": "Human Resources",
+    "level": "L2",
+    "skills": [
+      "recruitment",
+      "hrms",
+      "excel"
+    ],
+    "date_of_birth": "1997-02-14",
+    "joined_on": "2023-11-01"
+  },
+  {
+    "id": "E110",
+    "name": "Suresh Natarajan",
+    "manager": "Ravi Shankar",
+    "leave_balance": {
+      "annual": 14,
+      "sick": 8,
+      "casual": 4
+    },
+    "email": "suresh.natarajan@example.com",
+    "manager_email": "ravi.shankar@example.com",
+    "department": "Finance",
+    "level": "L4",
+    "skills": [
+      "payroll",
+      "excel",
+      "taxation"
+    ],
+    "date_of_birth": "1984-11-18",
+    "joined_on": "2018-04-02"
+  },
+  {
+    "id": "E111",
+    "name": "Revathi Ganesan",
+    "manager": "Suresh Natarajan",
+    "leave_balance": {
+      "annual": 18,
+      "sick": 3,
+      "casual": 0
+    },
+    "email": "revathi.ganesan@example.com",
+    "manager_email": "suresh.natarajan@example.com",
+    "department": "Finance",
+    "level": "L2",
+    "skills": [
+      "excel",
+      "tally",
+      "payroll"
+    ],
+    "date_of_birth": "1998-07-09",
+    "joined_on": "2024-05-20"
+  },
+  {
+    "id": "E112",
+    "name": "Manoj Pillai",
+    "manager": "Ravi Shankar",
+    "leave_balance": {
+      "annual": 8,
+      "sick": 7,
+      "casual": 6
+    },
+    "email": "manoj.pillai@example.com",
+    "manager_email": "ravi.shankar@example.com",
+    "department": "Sales",
+    "level": "L3",
+    "skills": [
+      "negotiation",
+      "communication",
+      "crm"
+    ],
+    "date_of_birth": "1989-10-15",
+    "joined_on": "2020-02-10"
+  },
+  {
+    "id": "E113",
+    "name": "Asha Thomas",
+    "manager": "Manoj Pillai",
+    "leave_balance": {
+      "annual": 12.0,
+      "sick": 8,
+      "casual": 6
+    },
+    "email": "asha.thomas@example.com",
+    "manager_email": "manoj.pillai@example.com",
+    "department": "Sales",
+    "level": "L1",
+    "skills": [
+      "communication",
+      "crm"
+    ],
+    "date_of_birth": "2001-01-22",
+    "joined_on": "2026-03-02"
+  },
+  {
+    "id": "E114",
+    "name": "Bala Murugan",
+    "manager": "Arun Kumar",
+    "leave_balance": {
+      "annual": 13,
+      "sick": 8,
+      "casual": 5
+    },
+    "email": "bala.murugan@example.com",
+    "manager_email": "arun.kumar@example.com",
+    "department": "Data",
+    "level": "L3",
+    "skills": [
+      "sql",
+      "python",
+      "power bi",
+      "statistics"
+    ],
+    "date_of_birth": "1991-09-05",
+    "joined_on": "2021-08-23"
+  },
+  {
+    "id": "E115",
+    "name": "Nisha Agarwal",
+    "manager": "Lakshmi Menon",
+    "leave_balance": {
+      "annual": 14,
+      "sick": 6,
+      "casual": 6
+    },
+    "email": "nisha.agarwal@example.com",
+    "manager_email": "lakshmi.menon@example.com",
+    "department": "Human Resources",
+    "level": "L3",
+    "skills": [
+      "payroll",
+      "labour law",
+      "employee relations"
+    ],
+    "date_of_birth": "1992-04-11",
+    "joined_on": "2020-10-05"
+  }
+]

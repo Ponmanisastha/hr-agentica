@@ -1,0 +1,174 @@
+[
+ {
+  "employee_id": "E104",
+  "ctc_annual": 4200000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "old",
+  "pt_state": "TN",
+  "pan": "ABCPS4000Q",
+  "uan": "100200300500",
+  "bank_account": "50100090000000",
+  "ifsc": "HDFC0001234",
+  "declarations": {
+   "80C": 150000,
+   "80D": 25000,
+   "rent_annual": 300000
+  }
+ },
+ {
+  "employee_id": "E105",
+  "ctc_annual": 6500000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "new",
+  "pt_state": "TN",
+  "pan": "ABDPS4001R",
+  "uan": "100200300501",
+  "bank_account": "50100090000001",
+  "ifsc": "HDFC0001234",
+  "declarations": {}
+ },
+ {
+  "employee_id": "E106",
+  "ctc_annual": 1400000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "new",
+  "pt_state": "TN",
+  "pan": "ABEPS4002S",
+  "uan": "100200300502",
+  "bank_account": "50100090000002",
+  "ifsc": "HDFC0001234",
+  "declarations": {}
+ },
+ {
+  "employee_id": "E107",
+  "ctc_annual": 800000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "old",
+  "pt_state": "TN",
+  "pan": "ABFPS4003T",
+  "uan": "100200300503",
+  "bank_account": "50100090000003",
+  "ifsc": "HDFC0001234",
+  "declarations": {
+   "80C": 150000,
+   "80D": 25000,
+   "rent_annual": 300000
+  }
+ },
+ {
+  "employee_id": "E108",
+  "ctc_annual": 1300000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "new",
+  "pt_state": "TN",
+  "pan": "ABGPS4004U",
+  "uan": "100200300504",
+  "bank_account": "50100090000004",
+  "ifsc": "HDFC0001234",
+  "declarations": {}
+ },
+ {
+  "employee_id": "E109",
+  "ctc_annual": 700000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "new",
+  "pt_state": "TN",
+  "pan": "ABHPS4005V",
+  "uan": "100200300505",
+  "bank_account": "50100090000005",
+  "ifsc": "HDFC0001234",
+  "declarations": {}
+ },
+ {
+  "employee_id": "E110",
+  "ctc_annual": 2600000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "old",
+  "pt_state": "TN",
+  "pan": "ABIPS4006W",
+  "uan": "100200300506",
+  "bank_account": "50100090000006",
+  "ifsc": "HDFC0001234",
+  "declarations": {
+   "80C": 150000,
+   "80D": 25000,
+   "rent_annual": 300000
+  }
+ },
+ {
+  "employee_id": "E111",
+  "ctc_annual": 750000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "new",
+  "pt_state": "TN",
+  "pan": "ABJPS4007X",
+  "uan": "100200300507",
+  "bank_account": "50100090000007",
+  "ifsc": "HDFC0001234",
+  "declarations": {}
+ },
+ {
+  "employee_id": "E112",
+  "ctc_annual": 2000000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "new",
+  "pt_state": "TN",
+  "pan": "ABKPS4008Y",
+  "uan": "100200300508",
+  "bank_account": "50100090000008",
+  "ifsc": "HDFC0001234",
+  "declarations": {}
+ },
+ {
+  "employee_id": "E113",
+  "ctc_annual": 600000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "old",
+  "pt_state": "TN",
+  "pan": "ABLPS4009Z",
+  "uan": "100200300509",
+  "bank_account": "50100090000009",
+  "ifsc": "HDFC0001234",
+  "declarations": {
+   "80C": 150000,
+   "80D": 25000,
+   "rent_annual": 300000
+  }
+ },
+ {
+  "employee_id": "E114",
+  "ctc_annual": 2200000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "new",
+  "pt_state": "TN",
+  "pan": "ABMPS4010A",
+  "uan": "100200300510",
+  "bank_account": "50100090000010",
+  "ifsc": "HDFC0001234",
+  "declarations": {}
+ },
+ {
+  "employee_id": "E115",
+  "ctc_annual": 1600000,
+  "effective_from": "2026-04-01",
+  "metro": true,
+  "regime": "new",
+  "pt_state": "TN",
+  "pan": "ABNPS4011B",
+  "uan": "100200300511",
+  "bank_account": "50100090000011",
+  "ifsc": "HDFC0001234",
+  "declarations": {}
+ }
+]

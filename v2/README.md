@@ -2,7 +2,7 @@
 
 AI agents for HR built on LangGraph, LangChain tools, a screening crew, Claude through a LiteLLM gateway with budgets, local RAG/KAG/CAG/MAG, SQLite, logins with roles, MCP, A2A, triggers, hooks and skills. It also includes an engineering agent that turns errors and feedback into tickets and works them through to a reviewed, human-approved fix.
 
-**How it works and why:** [DESIGN.md](DESIGN.md). v1 (the folder above this one) is unchanged.
+**How it works and why:** [DESIGN.md](DESIGN.md). **Step by step, with sample data:** [GUIDE.md](GUIDE.md). v1 (the folder above this one) is unchanged.
 
 ## Set up on WSL (Python 3.14)
 
@@ -40,6 +40,18 @@ python app.py budget set screening 20 --on-exceed block
 ```
 
 Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback, and **How I answered** showing each tool the agent called), Policies, Hiring, Projects, Culture, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
+
+## Sample data
+
+`samples/` has 11 policy documents (PDF, Word, Markdown), 10 resumes for three openings, and 15 employees with leave
+history and salaries, all for a fictional company. Load it, then follow [GUIDE.md](GUIDE.md):
+
+```bash
+python app.py samples load                                         # adds only what is missing
+python app.py knowledge rag|cag|kag "<question>"                   # what each knowledge layer returns
+python app.py knowledge kag rules                                  # leave rules read from the documents
+python app.py knowledge mag <username>                             # what the assistant remembers about a user
+```
 
 ## Your HR policy documents
 
@@ -186,7 +198,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 96 tests, offline, about 25 seconds
+python -m unittest discover -s tests -t .     # 104 tests, offline, about 35 seconds
 ```
 
 ## Layout

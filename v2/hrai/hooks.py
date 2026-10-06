@@ -67,7 +67,8 @@ PII = [
     (re.compile(r"\b\d{9,18}\b"), "[ACCOUNT]"),
 ]
 INJECTION = re.compile(
-    r"ignore (all |any )?(previous|prior|above) (instructions|rules)|reveal (the |your )?(system prompt|password|api key)"
+    r"ignore (all |any )?((your|the|previous|prior|above|earlier|system) )+(instructions|rules|prompt)"
+    r"|reveal (the |your )?(system prompt|password|api key)"
     r"|you are now (an?|the) |disregard (your|the) (rules|instructions)|act as (an? )?admin", re.I)
 
 

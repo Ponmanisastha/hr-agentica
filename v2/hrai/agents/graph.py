@@ -39,7 +39,9 @@ class State(TypedDict, total=False):
 FOLLOW_UP = re.compile(r"^\s*(and|what about|how about|also|same for|ok(ay)?,? (and|what about))\b[\s,]*", re.I)
 ABOUT_THE_CHAT = re.compile(r"what (did|was) i (just )?ask|my (last|previous|earlier) question|what were we (talking|discussing)", re.I)
 POLICY_TOPIC = re.compile(r"\b(leave|polic(y|ies)|holiday|notice period|maternity|paternity|benefits?|reimburs\w*|"
-                          r"work from home|wfh|allowance|entitle\w*|eligib\w*)\b", re.I)
+                          r"work from home|wfh|allowance|entitle\w*|eligib\w*|insurance|probation|onboarding documents?|"
+                          r"documents? (do )?i need|code of conduct|posh|harass\w*|gifts?|travel|hotel|expenses?|"
+                          r"working hours|attendance|resign\w*|gratuity)\b", re.I)
 TOPICS = ["annual", "sick", "casual", "maternity", "paternity", "notice period", "work from home", "reimbursement",
           "public holiday", "onboarding"]
 
@@ -82,6 +84,7 @@ def keyword_route(text):
                  r"coming up this (month|week)|\bplan a\b|\borganis\w+ a\b|\borganiz\w+ a\b", t):
         return "culture"
     if re.search(r"project|allocat|staff(ing|ed)?\b|bench|capacity|utilisation|utilization|timesheet|milestone|"
+                 r"\blog(ged)? \d+(\.\d+)? ?h(ou)?rs?\b|"
                  r"who is free|roll(ing)? off|\bfte\b|what is slipping|slipping|\btasks?\b|\bput\b .* \bon\b", t):
         return "projects"
     if re.search(r"payslip|pay ?slip|payroll|salary|\bctc\b|\bpf\b|\besi\b|professional tax|\btds\b|take[- ]home|"
