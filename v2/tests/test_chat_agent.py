@@ -196,6 +196,7 @@ class PolicyWebTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()
         clear_policies()
 
     def call(self, path, token, body=None):
@@ -205,7 +206,8 @@ class PolicyWebTests(unittest.TestCase):
             with urllib.request.urlopen(r) as resp:
                 return resp.status, json.loads(resp.read())
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read())
+            with e:
+                return e.code, json.loads(e.read())
 
     def test_upload_list_and_remove(self):
         hr, emp = auth.login("chat-hr", "chat-hr-password"), auth.login("chat-emp", "chat-emp-password")

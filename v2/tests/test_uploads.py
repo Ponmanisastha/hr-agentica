@@ -197,6 +197,7 @@ class UploadWebTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()
         clear_policies()
 
     def call(self, path, token, body=None, raw=False):
@@ -207,7 +208,8 @@ class UploadWebTests(unittest.TestCase):
                 data = resp.read()
                 return resp.status, (data, resp.headers) if raw else json.loads(data)
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read())
+            with e:
+                return e.code, json.loads(e.read())
 
     def test_policy_upload_diff_and_rollback(self):
         clear_policies()

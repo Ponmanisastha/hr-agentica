@@ -28,6 +28,16 @@ def setUpModule():
     bootstrap()
 
 
+class SettingsTests(unittest.TestCase):
+    def test_empty_folder_settings_use_the_defaults(self):
+        """.env.example leaves HRAI_POLICY_DIR and HRAI_INBOX empty; that must not mean the current folder."""
+        from hrai import hiring
+        from hrai.knowledge import policies
+        with mock.patch.dict(os.environ, {"HRAI_POLICY_DIR": "", "HRAI_INBOX": ""}):
+            self.assertEqual(policies.policy_dir(), config.ROOT / "policies")
+            self.assertEqual(hiring.inbox_root(), config.ROOT / "inbox")
+
+
 class AuthTests(unittest.TestCase):
     def test_password_is_hashed_and_login_works(self):
         row = db.q1("SELECT password_hash FROM users WHERE username='hr1'")
@@ -303,6 +313,7 @@ class ProtocolTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()
 
     def req(self, path, body=None, token=None):
         r = urllib.request.Request(self.base + path, data=json.dumps(body).encode() if body is not None else None,
@@ -311,7 +322,8 @@ class ProtocolTests(unittest.TestCase):
             with urllib.request.urlopen(r) as resp:
                 return resp.status, json.loads(resp.read()), resp.headers
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read()), e.headers
+            with e:
+                return e.code, json.loads(e.read()), e.headers
 
     def test_a2a_card_and_message(self):
         code, card, _ = self.req("/.well-known/agent-card.json")

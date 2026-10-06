@@ -2,7 +2,7 @@
 
 AI agents for HR built on LangGraph, LangChain tools, a screening crew, Claude through a LiteLLM gateway with budgets, local RAG/KAG/CAG/MAG, SQLite, logins with roles, MCP, A2A, triggers, hooks and skills. It also includes an engineering agent that turns errors and feedback into tickets and works them through to a reviewed, human-approved fix.
 
-**How it works and why:** [DESIGN.md](DESIGN.md). **Step by step, with sample data:** [GUIDE.md](GUIDE.md). v1 (the folder above this one) is unchanged.
+**How it works and why:** [DESIGN.md](DESIGN.md). **First run on your machine, and testing RAG, CAG, KAG and MAG one by one:** [LOCAL_SETUP.md](LOCAL_SETUP.md). **Every feature step by step:** [GUIDE.md](GUIDE.md). v1 (the folder above this one) is unchanged.
 
 ## Set up on WSL (Python 3.14)
 
@@ -223,7 +223,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 114 tests, offline, about 35 seconds
+python -m unittest discover -s tests -t .     # 115 tests, offline, about 35 seconds
 ```
 
 ## Layout

@@ -111,6 +111,7 @@ class InsightsWebTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()
 
     def get(self, path, token):
         r = urllib.request.Request(self.base + path, headers={"Authorization": f"Bearer {token}"})
@@ -118,7 +119,8 @@ class InsightsWebTests(unittest.TestCase):
             with urllib.request.urlopen(r) as resp:
                 return resp.status, resp.headers.get("Content-Type"), resp.read().decode()
         except urllib.error.HTTPError as e:
-            return e.code, None, e.read().decode()
+            with e:
+                return e.code, None, e.read().decode()
 
     def test_dashboard_api_and_roles(self):
         hr = auth.login("hr1", "hr-password-1")

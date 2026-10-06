@@ -153,16 +153,27 @@ def now():
     return datetime.now().isoformat(timespec="seconds")
 
 
+class _Owned:
+    """Holds a thread's connection and closes it when the thread ends (or the database path changes), so web
+    request threads do not leave connections open."""
+
+    def __init__(self, c, path):
+        self.c, self.path = c, path
+
+    def __del__(self):
+        self.c.close()
+
+
 def conn() -> sqlite3.Connection:
     path = str(config.home() / "hrai.db")
-    c = getattr(_local, "conn", None)
-    if c is None or getattr(_local, "path", None) != path:
+    held = getattr(_local, "held", None)
+    if held is None or held.path != path:
         c = sqlite3.connect(path, timeout=30, check_same_thread=False)
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA foreign_keys=ON")
-        _local.conn, _local.path = c, path
-    return c
+        _local.held = _Owned(c, path)
+    return _local.held.c
 
 
 def q(sql, args=()):

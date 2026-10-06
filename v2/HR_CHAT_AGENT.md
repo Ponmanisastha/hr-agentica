@@ -82,7 +82,7 @@ From the command line, the same flow runs with `python app.py ask "What is my le
 
 ## Tests
 
-`python -m unittest discover -s tests -t .` runs 114 offline tests. `tests/test_chat_agent.py` covers this brief:
+`python -m unittest discover -s tests -t .` runs 115 offline tests. `tests/test_chat_agent.py` covers this brief:
 your own documents replacing the sample and driving the rules, Word and unstructured files, the watch trigger,
 balances and accrual, questions that book nothing, applying, employee isolation, follow-ups, conversation
 memory, routing, and the Policies API.

@@ -6,7 +6,10 @@ import shutil
 import tempfile
 import warnings
 
-warnings.simplefilter("ignore", ResourceWarning)
+# chromadb's own code calls a function Python 3.14 deprecates when it is imported; nothing to fix on our side
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", DeprecationWarning)
+    import chromadb  # noqa: F401
 HOME = tempfile.mkdtemp(prefix="hrai-test-")
 os.environ.update(HRAI_HOME=HOME, HRAI_INBOX=os.path.join(HOME, "inbox"), HRAI_POLICY_DIR=os.path.join(HOME, "policies"),
                   HRAI_DOCS_DIR=os.path.join(HOME, "documents"),
