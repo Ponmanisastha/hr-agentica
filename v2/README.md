@@ -39,7 +39,21 @@ python app.py budget                                # spend vs budget per agent
 python app.py budget set screening 20 --on-exceed block
 ```
 
-Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Projects, Culture, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
+Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback, and **How I answered** showing each tool the agent called), Policies, Hiring, Projects, Culture, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
+
+## Your HR policy documents
+
+Put your own policies (`.pdf`, `.docx`, `.md`, `.txt`) in `v2/policies/`, or upload them on the **Policies** page.
+They replace the sample handbook, answers cite them by file and section, and the leave rules (notice, limits,
+accrual, carry-forward) are read from them. See `policies/README.md`.
+
+```bash
+python app.py policies add "Leave Policy 2026.pdf"   # copy in and index
+python app.py policies                               # what was indexed
+```
+
+[HR_CHAT_AGENT.md](HR_CHAT_AGENT.md) maps the HR chat agent brief (authentication, policy answers, leave balance and
+calculation tools, reasoning, context) to the code, with a five-minute demo.
 
 ## Hiring pipeline
 
@@ -172,7 +186,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 82 tests, offline, about 21 seconds
+python -m unittest discover -s tests -t .     # 96 tests, offline, about 25 seconds
 ```
 
 ## Layout
@@ -188,6 +202,7 @@ python -m unittest discover -s tests -t .     # 82 tests, offline, about 21 seco
 | `hrai/insights.py` | HR analytics, the needs-attention list, daily report, CSV export |
 | `hrai/payroll.py` | Salary structures, Indian payroll, payslips, payroll runs |
 | `hrai/projects.py` | Projects, allocations, capacity and the bench, tasks, timesheets |
+| `hrai/knowledge/policies.py`, `policies/` | Your HR policy documents: reading, sections, citations |
 | `hrai/engage.py` | Events and budgets, RSVPs, kudos, awards, anonymous pulse surveys |
 | `hrai/auth.py`, `hrai/db.py` | Logins and roles; SQLite schema |
 | `hrai/hooks.py`, `hooks.d/` | Hooks |

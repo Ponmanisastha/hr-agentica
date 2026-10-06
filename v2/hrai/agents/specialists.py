@@ -85,24 +85,36 @@ def _run_llm(spec, request, memories, run):
 # ---------------------------------------------------------------- specs
 
 POLICY = Spec(
-    "policy", "Policy agent", "Answers HR policy questions from the handbook with section citations.", "fast",
-    ["policy_context", "search_policy", "kg_facts", "search_faq", "recall_memory", "load_skill", "report_issue"],
-    "You are the HR policy helpdesk. The full handbook is in <handbook> below (cache-augmented). Answer in 2-4 "
-    "sentences and cite the section number. Use kg_facts for exact numbers, approvers and reporting lines. If the "
-    "handbook does not cover the question, say \"I couldn't find this in the handbook\" and suggest contacting "
-    "hr@example.com. Never invent policy.", cache_system=True,
+    "policy", "Policy agent", "Answers HR policy questions from the company's policy documents, citing the document "
+    "and section.", "fast",
+    ["policy_context", "search_policy", "kg_facts", "get_employee", "search_faq", "recall_memory", "load_skill",
+     "report_issue"],
+    "You are the HR policy helpdesk. The company's policy documents are in <handbook> below (cache-augmented); when "
+    "they are too large to fit, use search_policy. Answer in 2-4 sentences and cite the document and section. Use "
+    "kg_facts for exact numbers, approvers and reporting lines. When the question is about the asker (\"my notice "
+    "period\", \"am I eligible\"), call get_employee for their level and manager and apply the policy to them. If "
+    "the documents do not cover the question, say \"I couldn't find this in our policy documents\" and suggest "
+    "contacting hr@example.com. Never invent policy.", cache_system=True,
     examples=["How many days of maternity leave do we offer?", "Can I work from home three days a week?"])
 
 LEAVE = Spec(
-    "leave", "Leave agent", "Evaluates and records leave requests using the handbook rules; routes exceptions to managers.",
-    "fast",
-    ["get_employee", "evaluate_leave_request", "record_leave_decision", "kg_facts", "draft_email", "recall_memory",
-     "load_skill", "ask_agent", "report_issue"],
-    "You are the HR leave agent. For a leave request you need the employee id, leave type and dates. Call "
-    "evaluate_leave_request, then record_leave_decision with the same arguments, then draft an email to the employee "
-    "with the outcome (and to the manager when it needs their approval). Never approve anything the rules did not "
-    "approve. Answer in 2-4 sentences.",
-    examples=["Employee E101 wants annual leave from 2026-10-28 to 2026-10-30."])
+    "leave", "Leave agent", "Leave balances, eligibility and day calculations, and leave requests checked against the "
+    "policy rules; exceptions go to the manager.", "fast",
+    ["leave_balance", "get_employee", "evaluate_leave_request", "record_leave_decision", "kg_facts", "search_policy",
+     "draft_email", "recall_memory", "load_skill", "ask_agent", "report_issue"],
+    "You are the HR leave agent. Employees may only ask about their own leave; leave the employee id empty to use "
+    "theirs. Decide first whether the user is asking or applying.\n"
+    "- Balance, accrual or \"how much leave do I have\": call leave_balance.\n"
+    "- A question about dates (\"can I take\", \"how many days would\", \"am I eligible\"): call "
+    "evaluate_leave_request only. Say how many working days it uses (weekends and public holidays are not counted), "
+    "the balance after, and whether it would be approved automatically or need the manager, with the policy reason. "
+    "Do not record anything; offer to apply.\n"
+    "- A clear request to apply or book: evaluate_leave_request, then record_leave_decision with the same arguments, "
+    "then draft an email to the employee (and to the manager when it needs their approval).\n"
+    "Never approve anything the rules did not approve. Cite the policy document and section the tools return. "
+    "Answer in 2-4 sentences.",
+    examples=["What is my leave balance?", "Can I take casual leave on 2026-10-08 and 2026-10-09?",
+              "Employee E101 wants annual leave from 2026-10-28 to 2026-10-30."])
 
 ONBOARDING = Spec(
     "onboarding", "Onboarding agent", "Checks documents, builds the dated onboarding plan and drafts the emails.", "smart",
@@ -200,13 +212,43 @@ def plan_policy(run, request):
     generic = {"policy", "leave", "day", "employee", "company", "offer", "rule", "allowed", "get", "have", "there"}
     asked = vectors._keywords(request) - generic
     if not hits or (asked and not asked & vectors._keywords(hits[0]["text"])):
-        return "I couldn't find this in the handbook. Please contact HR at hr@example.com."
+        return "I couldn't find this in our policy documents. Please contact HR at hr@example.com."
     top = hits[0]
     body = top["text"].split("\n", 1)[1] if "\n" in top["text"] else top["text"]
-    answer = f"{body}\n\nSource: Policy handbook, section {top['section']}."
+    answer = body
+    user = auth.current_user()
+    if user.employee_id and re.search(r"\b(my|i|me)\b", request, re.I) and "notice period" in request.lower():
+        me = run.call("get_employee", employee_id=user.employee_id)
+        if "error" not in me and me.get("notice_period_days"):
+            answer += f"\n\nFor you (level {me['level']}), that is {me['notice_period_days']} days."
+    answer += f"\n\nSource: {top['document']}, section {top['section']}."
     if facts:
         answer += "\nRelated facts: " + "; ".join(f"{f['subject']} {f['predicate'].replace('_', ' ')} {f['object']}" for f in facts[:4])
     return answer
+
+
+LEAVE_BALANCE = re.compile(r"\bbalance|\b(left|remaining|taken)\b|accru|\bearn|how many .*\b(do i have|have i|i have)\b", re.I)
+LEAVE_QUESTION = re.compile(r"^\s*(can|could|may|would|will|should|is|am|do|does|how|what|if|check)\b|\?\s*$|\bif i\b|"
+                            r"deduct|cost me|eligib|would it", re.I)
+LEAVE_APPLY = re.compile(r"\b(apply|book|submit|put in|i (want|need|would like)|please|wants|is asking for|request(ing)?)\b", re.I)
+MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+          "november", "december"]
+
+
+def _as_of(request):
+    """"by December" -> the last day of that month (this year, or next if it has passed)."""
+    import calendar
+    m = re.search(r"\b(?:by|in|until|end of)\s+(" + "|".join(MONTHS) + r")\b", request, re.I)
+    if not m:
+        return ""
+    today = config.today()
+    month = MONTHS.index(m.group(1).lower()) + 1
+    year = today.year + (month < today.month)
+    return f"{year}-{month:02d}-{calendar.monthrange(year, month)[1]:02d}"
+
+
+def _leave_type(request):
+    return next((t for t in ("sick", "casual", "annual") if t in request.lower()), None)
 
 
 def plan_leave(run, request):
@@ -214,9 +256,48 @@ def plan_leave(run, request):
     emp = re.search(r"\bE\d{3}\b", request, re.I)
     emp_id = emp.group(0).upper() if emp else user.employee_id
     dates = re.findall(r"\d{4}-\d{2}-\d{2}", request)
-    if not (emp_id and dates):
+    asking = LEAVE_QUESTION.search(request) and not LEAVE_APPLY.search(request)
+    if not dates or (LEAVE_BALANCE.search(request) and not LEAVE_APPLY.search(request)):
+        if not emp_id:
+            return "Which employee? Give an employee id such as E101, or sign in with an employee login."
+        b = run.call("leave_balance", employee_id=emp_id, as_of=_as_of(request))
+        if "error" in b:
+            return b["error"]
+        rem, acc = b["remaining"], b["annual_accrual"]
+        who = "You have" if emp_id == user.employee_id else f"{b['name']} has"
+        lines = [f"{who} {rem['annual']:g} annual, {rem['sick']:g} sick and {rem['casual']:g} casual leave days left."]
+        taken = {k: v for k, v in b["taken_this_year"].items() if v}
+        if taken:
+            lines.append("Taken this year: " + ", ".join(f"{v:g} {k}" for k, v in taken.items()) + ".")
+        if b["waiting_for_approval"]:
+            lines.append("Waiting for approval: " + "; ".join(f"{r['leave_type']} {r['start_date']} to {r['end_date']}"
+                                                              for r in b["waiting_for_approval"]) + ".")
+        if b["upcoming"]:
+            lines.append("Coming up: " + "; ".join(f"{r['leave_type']} {r['start_date']} to {r['end_date']}"
+                                                    for r in b["upcoming"]) + ".")
+        lines.append(f"Annual leave is credited at {acc['credited_per_month']:g} days a month, so "
+                     f"{acc['accrued_this_year']:g} days have accrued by {b['as_of']}; up to "
+                     f"{acc['carry_forward_cap']:g} unused days carry forward ({acc['policy']}).")
+        return " ".join(lines)
+    if not emp_id:
         return "I need the employee id and the leave dates (YYYY-MM-DD) to process a leave request."
-    lt = next((t for t in ("sick", "casual", "annual") if t in request.lower()), "annual")
+    lt = _leave_type(request) or "annual"
+    if asking:
+        ev = run.call("evaluate_leave_request", employee_id=emp_id, leave_type=lt, start_date=dates[0],
+                      end_date=dates[-1])
+        if "error" in ev:
+            return ev["error"]
+        span = f"{lt} leave from {dates[0]} to {dates[-1]}"
+        msg = (f"That {span} uses {ev['working_days']} working day{'s' if ev['working_days'] != 1 else ''} "
+               f"(weekends and public holidays are not counted), leaving {ev['balance_before'] - ev['working_days']:g} "
+               f"of your {ev['balance_before']:g} {lt} days. ")
+        if ev["decision"] == "approve":
+            msg += "It would be approved automatically."
+        else:
+            msg += f"It would need {ev['manager']}'s approval because: {'; '.join(ev['reasons'])}."
+        if ev["note"]:
+            msg += f" {ev['note']}."
+        return msg + " Nothing has been booked; say \"apply\" with the same dates to request it."
     res = run.call("record_leave_decision", employee_id=emp_id, leave_type=lt, start_date=dates[0], end_date=dates[-1])
     if "error" in res:
         return res["error"]

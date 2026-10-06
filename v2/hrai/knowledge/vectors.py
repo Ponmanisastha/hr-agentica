@@ -124,18 +124,30 @@ def sections(markdown_text, source):
 
 
 def handbook_text():
-    """The policy handbook plus approved additions written by the ticket agent."""
-    text = (config.DATA / "policy_handbook.md").read_text(encoding="utf-8")
-    extra = config.DATA / "kb_additions.md"
-    if extra.exists():
-        text += "\n" + extra.read_text(encoding="utf-8")
-    return text
+    """All policy text: your documents in policies/ (or the sample handbook), plus approved additions."""
+    from . import policies
+    return policies.combined_text()
+
+
+def reset(name):
+    """Drop a collection so documents that were removed stop being found."""
+    _, kind = _embedder()
+    try:
+        client().delete_collection(f"{name}-{kind}")
+    except Exception:  # it did not exist yet
+        pass
+
+
+def index_policies():
+    from . import policies
+    reset("policy")
+    return upsert("policy", policies.sections())
 
 
 def index_all():
-    """(Re)build every collection from the handbook, FAQ and candidate resumes."""
+    """(Re)build every collection from the policy documents, FAQ and candidate resumes."""
     counts = {}
-    counts["policy"] = upsert("policy", sections(handbook_text(), "policy_handbook"))
+    counts["policy"] = index_policies()
     counts["faq"] = upsert("faq", sections((config.DATA / "candidate_faq.md").read_text(encoding="utf-8"), "candidate_faq"))
     counts["resumes"] = upsert("resumes", [
         {"id": c["id"], "text": c["resume_text"], "meta": {"name": c["name"], "job_id": c["job_id"] or ""}}

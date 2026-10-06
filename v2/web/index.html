@@ -289,7 +289,7 @@
       <section id="ask" class="hidden">
         <div class="card">
           <textarea id="q" placeholder="Ask anything: 'Onboard Vikram Singh', 'I need sick leave 2026-10-12 to 2026-10-13', 'How is hiring going?'"></textarea>
-          <div class="row" style="margin-top:10px"><button id="send" class="btn primary">Send</button><span id="busy" class="muted"></span></div>
+          <div class="row" style="margin-top:10px"><button id="send" class="btn primary">Send</button><button id="newChat" class="btn ghost" title="Start a new conversation; the agent forgets the earlier turns">New conversation</button><span id="busy" class="muted"></span></div>
           <div id="examples" class="examples"></div>
         </div>
         <div id="answers"></div>
@@ -336,6 +336,19 @@
           </div>
         </div>
         <div id="jDetail"></div>
+      </section>
+
+      <!-- policies -->
+      <section id="policies" class="hidden">
+        <div class="card">
+          <div class="card-head"><div><h3>Policy documents</h3><div id="polSub" class="sub"></div></div></div>
+          <div id="polHR" class="hidden row" style="margin:6px 0 12px">
+            <label class="btn primary">Add documents<input id="polFiles" type="file" multiple accept=".pdf,.docx,.txt,.md" class="hidden"></label>
+            <button id="polReindex" class="btn">Re-index now</button>
+            <span id="polMsg" class="muted"></span>
+          </div>
+          <div id="polList"></div>
+        </div>
       </section>
 
       <!-- culture -->
@@ -444,11 +457,12 @@ const ICONS = {
   payroll:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
   mypay:'<path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
   projects:'<path d="M3 7h7l2 2h9v10a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M8 13h8"/>',
+  policies:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
   culture:'<path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z"/>',
 };
 const HR = r => ['admin','hr'].includes(r);
 const MGR = r => ['admin','hr','manager'].includes(r);
-const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['hiring','Hiring',HR],['projects','Projects',MGR],['payroll','Payroll',HR],
+const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['policies','Policies',()=>true],['hiring','Hiring',HR],['projects','Projects',MGR],['payroll','Payroll',HR],
               ['culture','Culture',()=>true],['mypay','My pay',r=>!HR(r)],['approvals','Approvals',MGR],
               ['tickets','Tickets',HR],['budget','AI budget',HR],['outbox','Outbox',HR]];
 function show(tab) {
@@ -456,7 +470,7 @@ function show(tab) {
   [...$('nav').children].forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'); });
   $('pageTitle').textContent = (TABS.find(t => t[0] === tab) || [])[1] || '';
   store.set('hr-tab', tab);
-  ({dashboard:loadDashboard, hiring:loadHiring, projects:loadProjects, culture:loadCulture, payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
+  ({dashboard:loadDashboard, hiring:loadHiring, projects:loadProjects, culture:loadCulture, policies:loadPolicies, payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
 }
 function start(user) {
   me = user; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -666,18 +680,32 @@ $('dJob').onchange = loadDashboard; $('dRefresh').onclick = loadDashboard;
 function examples() {
   const list = HR(me.role) ? ['What needs my attention today?', 'How is hiring going?', 'Who is free next month?', 'What is slipping?', 'Run payroll for this month']
     : MGR(me.role) ? ['Who is free next month?', 'What is slipping?', 'Show my projects', 'What is coming up this month?']
-    : ['How many casual leave days do we get?', 'What is coming up this month?', 'Show my payslip', 'I need casual leave on 2026-10-08'];
+    : ['What is my leave balance?', 'Can I take casual leave on 2026-10-08 and 2026-10-09?', 'How many days of maternity leave do we offer?', 'What is my notice period?'];
+  $('q').placeholder = HR(me.role) ? "Ask anything: 'Onboard Vikram Singh', 'How is hiring going?', 'Who is free next month?'"
+    : "Ask about HR policies, your leave balance, or dates you'd like off: 'Can I take annual leave from 2026-10-20 to 2026-10-23?'";
   $('examples').replaceChildren(...list.map(x => { const c = el('button', x, 'chip'); c.onclick = () => { $('q').value = x; $('send').click(); }; return c; }));
+}
+let convo = 'web-' + Date.now();
+$('newChat').onclick = () => { convo = 'web-' + Date.now(); $('answers').replaceChildren(); $('busy').textContent = 'New conversation started.'; };
+const short = v => { const t = typeof v === 'string' ? v : JSON.stringify(v); return t.length > 220 ? t.slice(0, 220) + '…' : t; };
+function steps(r) {
+  // The agent's workflow for this answer: which agent, how it ran, and every tool it called with what.
+  const d = el('details'); d.style.marginTop = '8px';
+  d.append(el('summary', `How I answered: ${r.agent} agent · ${r.mode === 'rules' ? 'offline planner' : r.mode} · ${r.trace.length} step${r.trace.length === 1 ? '' : 's'}`));
+  const ol = el('ol'); ol.style.cssText = 'margin:8px 0 0;padding-left:20px';
+  r.trace.forEach(t => { const li = el('li'); li.style.marginBottom = '6px';
+    li.append(el('code', t.tool), el('span', ' ' + short(t.input), 'muted'));
+    const o = el('div', '→ ' + short(t.output), 'muted'); o.style.fontSize = '12px'; li.append(o); ol.append(li); });
+  d.append(ol); return d;
 }
 $('send').onclick = async () => {
   const q = $('q').value.trim(); if (!q) return;
   $('busy').textContent = 'Working...'; $('send').disabled = true;
   const card = el('div', undefined, 'card answer'); card.append(el('div', q, 'q'));
   try {
-    const r = await api('/api/ask', {request:q, conversation_id:'web'});
-    card.append(el('pre', r.result));
+    const r = await api('/api/ask', {request:q, conversation_id:convo});
+    card.append(el('pre', r.result), steps(r));
     const meta = el('div', undefined, 'row'); meta.style.marginTop = '10px';
-    meta.append(el('span', `${r.agent} agent`, 'pill'), el('span', `${r.mode} · ${r.trace.length} tool call${r.trace.length === 1 ? '' : 's'}`, 'muted'));
     const up = el('button', '👍 Helpful', 'btn ghost'), down = el('button', '👎 Wrong or unhelpful', 'btn ghost');
     const fb = el('span'); fb.style.marginLeft = 'auto'; fb.append(up, down);
     up.onclick = () => api('/api/feedback', {request:q, answer:r.result, rating:1, agent:r.agent}).then(() => fb.replaceChildren(el('span','Thanks!','muted')));
@@ -691,6 +719,43 @@ $('send').onclick = async () => {
   $('answers').prepend(card); $('busy').textContent = ''; $('q').value = ''; $('send').disabled = false;
 };
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('send').click(); });
+
+// ---------------------------------------------------------------- policies
+async function loadPolicies() {
+  $('polHR').classList.toggle('hidden', !HR(me.role));
+  let d; try { d = await api('/api/policies'); } catch (e) { return $('polSub').textContent = e.message; }
+  drawPolicies(d);
+}
+function drawPolicies(d) {
+  const n = d.documents.reduce((a, x) => a + x.sections.length, 0);
+  $('polSub').textContent = d.using_sample
+    ? `Answers come from the sample handbook. Add your own documents here, or put them in ${d.folder}, and they replace it.`
+    : `Answers come from ${d.documents.length === 1 ? 'this document' : `these ${d.documents.length} documents`} (${n} section${n === 1 ? '' : 's'}) in ${d.folder}.`;
+  const box = $('polList'); box.replaceChildren();
+  d.documents.forEach(doc => {
+    const det = el('details'); det.style.cssText = 'border-top:1px solid var(--grid);padding:10px 0';
+    const sum = el('summary'); sum.append(el('strong', doc.name), el('span', ` · ${doc.sections.length} section${doc.sections.length === 1 ? '' : 's'}`, 'muted'));
+    det.append(sum);
+    const ul = el('ul'); ul.style.cssText = 'margin:8px 0 0;padding-left:20px'; doc.sections.forEach(s => ul.append(el('li', s))); det.append(ul);
+    if (HR(me.role) && !d.using_sample && !['Approved additions'].includes(doc.name)) {
+      const del = el('button', 'Remove', 'btn ghost'); del.style.marginTop = '6px';
+      del.onclick = async () => { if (!confirm(`Remove ${doc.name}? Answers stop using it straight away.`)) return;
+        try { drawPolicies(await api('/api/policies/delete', {name:doc.name})); $('polMsg').textContent = `Removed ${doc.name}.`; }
+        catch (e) { $('polMsg').textContent = e.message; } };
+      det.append(del);
+    }
+    box.append(det);
+  });
+}
+$('polFiles').onchange = async e => {
+  const list = [];
+  for (const f of e.target.files) { const buf = new Uint8Array(await f.arrayBuffer()); let bin = ''; buf.forEach(b => bin += String.fromCharCode(b)); list.push({name:f.name, content_b64:btoa(bin)}); }
+  $('polMsg').textContent = `Reading ${list.length} document(s)...`;
+  try { const d = await api('/api/policies/upload', {files:list}); drawPolicies(d); $('polMsg').textContent = `Indexed ${d.indexed_sections} sections. New questions use them now.`; }
+  catch (err) { $('polMsg').textContent = err.message; }
+  e.target.value = '';
+};
+$('polReindex').onclick = async () => { try { const d = await api('/api/policies/reindex', {}); drawPolicies(d); $('polMsg').textContent = `Indexed ${d.indexed_sections} sections.`; } catch (e) { $('polMsg').textContent = e.message; } };
 
 // ---------------------------------------------------------------- projects
 let jData = null;

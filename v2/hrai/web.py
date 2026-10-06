@@ -57,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length", 0))
-        if n > (MAX_UPLOAD_BODY if self.path.startswith("/api/hiring/upload") else MAX_BODY):
+        if n > (MAX_UPLOAD_BODY if self.path.startswith(("/api/hiring/upload", "/api/policies/upload")) else MAX_BODY):
             raise ValueError("Request body too large")
         if n and "application/json" not in self.headers.get("Content-Type", ""):
             raise ValueError("POST bodies must be application/json")
@@ -100,6 +100,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._get_projects(path)
         if path.startswith("/api/culture"):
             return self._get_culture(path)
+        if path == "/api/policies":
+            from .knowledge import policies
+            return self._send(200, policies.summary())
         if path in ("/api/insights", "/api/insights/candidates.csv"):
             from urllib.parse import parse_qs, urlparse
             from . import insights
@@ -251,6 +254,32 @@ class Handler(BaseHTTPRequestHandler):
                                                                "/api/culture/awards/decide"):
             auth.require("events:manage")   # so the console gets a clean 403 rather than a tool error
         return self._ok_or_error(calls[path]())
+
+    def _post_policies(self, path, body):
+        """HR adds, removes or re-indexes policy documents; answers use them as soon as this returns."""
+        import base64
+        from . import automations
+        from .knowledge import policies
+        auth.require("policies:manage")
+        folder = policies.policy_dir()
+        if path == "/api/policies/upload":
+            for f in body.get("files", [])[:20]:
+                name = re.sub(r"[^\w.\- ]", "_", f.get("name", ""))[:120].strip()
+                if not name or "." + name.rsplit(".", 1)[-1].lower() not in policies.SUPPORTED:
+                    raise ValueError(f"Unsupported file {f.get('name')!r}: use .pdf, .docx, .txt or .md")
+                data = base64.b64decode(f.get("content_b64", ""), validate=True)
+                if len(data) > MAX_FILE:
+                    raise ValueError(f"{name} is larger than 5 MB")
+                (folder / name).write_bytes(data)
+        elif path == "/api/policies/delete":
+            name = body.get("name", "")
+            target = (folder / name).resolve()
+            if folder.resolve() not in target.parents or not target.is_file():
+                raise ValueError(f"No policy document {name!r}")
+            target.unlink()
+        out = automations.reindex_policies()
+        db.audit(auth.current_user().username, "policies." + path.rsplit("/", 1)[1], {"sections": out["policy_sections"]})
+        return self._send(200, {**policies.summary(), "indexed_sections": out["policy_sections"]})
 
     def _post_projects(self, path, body):
         calls = {
@@ -406,6 +435,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._post_projects(path, body)
         if path.startswith("/api/culture/"):
             return self._post_culture(path, body)
+        if path in ("/api/policies/upload", "/api/policies/reindex", "/api/policies/delete"):
+            return self._post_policies(path, body)
         if path == "/api/logout":
             auth.logout(self._token())
             return self._send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Max-Age=0; Path=/"})
