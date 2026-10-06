@@ -173,3 +173,29 @@ def insights_report():
         finally:
             auth._current.reset(reset)
     return {"report": str(path), "attention_items": len(data["attention"]), "email_drafted": drafted}
+
+
+@triggers.schedule("payroll_reminder", daily="09:30")
+def payroll_reminder():
+    """From the 25th: remind HR to run and approve this month's payroll while it is still a draft."""
+    from . import payroll
+    if config.today().day < int(config.env("HRAI_PAYROLL_REMINDER_DAY", "25")):
+        return {"skipped": "too early in the month"}
+    month = config.today().strftime("%Y-%m")
+    s = payroll.summary(month)
+    if s["status"] in ("approved", "paid"):
+        return {"month": month, "status": s["status"]}
+    reset = _as(auth.User(0, "trigger", "service"))
+    try:
+        if s["status"] == "not_started":
+            body = f"Payroll for {month} has not been run yet. Run it in the Payroll tab, check it, then submit it for approval."
+        elif s["status"] == "draft":
+            body = (f"The {month} payroll is still a draft: {s['employees']} employees, net ₹{s['net']:,}. Submit it for "
+                    f"approval." + ("\nWarnings: " + "; ".join(s["warnings"]) if s["warnings"] else ""))
+        else:
+            body = f"The {month} payroll is waiting for approval: net ₹{s['net']:,}. Someone other than the submitter must approve it."
+        T.run("draft_email", to=config.env("HRAI_HR_EMAIL", "hr@example.com"), subject=f"Payroll {month}: {s['status']}",
+              body=body)
+    finally:
+        auth._current.reset(reset)
+    return {"month": month, "status": s["status"]}

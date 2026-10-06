@@ -143,7 +143,22 @@ INSIGHTS = Spec(
     "and where (Hiring board, Approvals, Tickets, Budget). If the data is too thin to show a trend, say so.",
     examples=["How is hiring going?", "What is our offer acceptance rate?", "What needs my attention today?"])
 
-SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT, INSIGHTS)}
+PAYROLL = Spec(
+    "payroll", "Salary and payroll agent",
+    "Salary structures, CTC breakups, tax regime comparison, revisions, monthly payroll (PF, ESI, professional tax, "
+    "TDS) and payslips.", "fast",
+    ["salary_breakup", "compare_tax_regimes", "set_salary", "update_salary_details", "propose_salary_revision",
+     "add_pay_adjustment", "run_payroll", "payroll_summary", "submit_payroll", "mark_payroll_paid", "my_payslip",
+     "salary_structures", "draft_email", "load_skill", "report_issue"],
+    "You are the salary and payroll agent for an Indian employer. Use the tools for every figure; never compute pay or "
+    "tax yourself. Say amounts in rupees. A salary revision and a payroll run both need human approval, and payroll is "
+    "approved by someone other than whoever submitted it, so say what is waiting rather than claiming it is done. "
+    "Nothing is ever paid from here: HR uploads the bank file and then records the payment. Tell employees their own "
+    "pay only. Follow the payroll-india skill.",
+    examples=["What is the breakup for a 12 lakh CTC?", "Run payroll for 2026-10", "Which tax regime is better for me?",
+              "Give Deepa a 10% hike from next month"])
+
+SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT, INSIGHTS, PAYROLL)}
 
 
 # ---------------------------------------------------------------- rules-only plans (no model)
@@ -293,7 +308,7 @@ def plan_insights(run, request):
         items = run.call("needs_attention")["items"]
         return ("Needs attention:\n" + "\n".join(f"{i + 1}. {a['text']}" for i, a in enumerate(items))) if items \
             else "Nothing needs attention right now."
-    for section, pattern in (("ai", r"\bai\b|budget|spend|cost|token"), ("leave", r"leave"),
+    for section, pattern in (("payroll", r"payroll|salary cost|wage bill"), ("ai", r"\bai\b|budget|spend|token"), ("leave", r"leave"),
                              ("onboarding", r"onboarding"), ("workforce", r"headcount|department|workforce|joiners")):
         if re.search(pattern, t):
             data = run.call("hr_insights", section=section)
@@ -301,5 +316,89 @@ def plan_insights(run, request):
     return run.call("hr_insights")["summary"]
 
 
+MONTH = r"(20\d\d-\d\d)|\b(january|february|march|april|may|june|july|august|september|october|november|december)\b"
+
+
+def _month_in(text):
+    m = re.search(MONTH, text, re.I)
+    if not m:
+        return ""
+    if m.group(1):
+        return m.group(1)
+    names = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+             "november", "december"]
+    mo = names.index(m.group(2).lower()) + 1
+    return f"{config.today().year}-{mo:02d}"
+
+
+def plan_payroll(run, request):
+    t = request.lower()
+    money = re.search(r"(\d+(?:\.\d+)?)\s*(lakh|lpa|l\b|crore|cr\b)?", t)
+    month = _month_in(request)
+    if re.search(r"payslip|pay ?slip|my pay|salary slip", t):
+        out = run.call("my_payslip", month=month)
+        return out.get("error") or out["text"]
+    if re.search(r"regime|old vs new|tax saving", t) and money:
+        amount = _amount(money)
+        out = run.call("compare_tax_regimes", ctc_annual=amount)
+        if "error" in out:
+            return out["error"]
+        return (f"On ₹{amount:,.0f} CTC the {out['better']} regime costs less. New regime: tax ₹{out['new']['tax']:,}, "
+                f"take-home ₹{out['new']['take_home_monthly']:,} a month. Old regime (with the declarations given): tax "
+                f"₹{out['old']['tax']:,}, take-home ₹{out['old']['take_home_monthly']:,} a month.")
+    if re.search(r"breakup|break-up|structure|components", t) and money:
+        amount = _amount(money)
+        b = run.call("salary_breakup", ctc_annual=amount)
+        if "error" in b:
+            return b["error"]
+        m, a = b["monthly"], b["annual"]
+        return (f"₹{amount:,.0f} CTC: monthly basic ₹{m['basic']:,}, HRA ₹{m['hra']:,}, special allowance "
+                f"₹{m['special_allowance']:,}, gross ₹{m['gross']:,}. Employee PF ₹{b['employee_deductions_monthly']['pf']:,} "
+                f"a month. In the CTC: employer PF ₹{a['employer_pf']:,}, gratuity ₹{a['gratuity']:,} a year"
+                + (f", employer ESI ₹{a['employer_esi']:,}" if b["esi_applicable"] else "") + ".")
+    if re.search(r"\brun\b.*payroll|process (the )?payroll|calculate payroll", t):
+        out = run.call("run_payroll", month=month)
+        return out.get("error") or (f"Draft payroll for {out['month']}: {out['employees']} employees, gross "
+                                    f"₹{out['gross']:,}, net ₹{out['net']:,}, employer cost ₹{out['employer_cost']:,}."
+                                    + (" Warnings: " + "; ".join(out["warnings"]) + "." if out["warnings"] else "")
+                                    + " Submit it for approval when it looks right.")
+    if re.search(r"submit", t) and "payroll" in t:
+        out = run.call("submit_payroll", month=month)
+        return out.get("error") or f"Payroll for {out['month']} is waiting for approval (#{out['approval_id']})."
+    if re.search(r"hike|raise|revision|increment|increase", t):
+        name = re.sub(r".*?(?:give|for)\s+", "", request, flags=re.I).split()[0] if re.search(r"give|for", t, re.I) else ""
+        pct = re.search(r"(\d+(?:\.\d+)?)\s*%", t)
+        if name and (pct or money):
+            out = run.call("propose_salary_revision", employee=name, pct=float(pct.group(1)) if pct else 0,
+                           new_ctc_annual=0 if pct else _amount(money), reason=request)
+            return out.get("error") or (f"Proposed ₹{out['old_ctc']:,} to ₹{out['new_ctc']:,} ({out['pct']:+}%) from "
+                                        f"{out['effective_from']}. Waiting for approval #{out['approval_id']}.")
+    if re.search(r"salary|ctc|structures", t) and re.search(r"everyone|all|list|structures", t):
+        rows = run.call("salary_structures")["employees"]
+        return "\n".join(f"{r['name']} ({r['id']}): " + (f"₹{r['ctc_annual']:,} CTC, ₹{r['monthly_gross']:,} gross a month, "
+                          f"{r['regime']} regime" + (f", missing {', '.join(r['missing'])}" if r["missing"] else "")
+                          if r["ctc_annual"] else "no salary set up")
+                         for r in rows)
+    out = run.call("payroll_summary", month=month)
+    if "error" in out:
+        return out["error"]
+    if out["status"] == "not_started":
+        return f"No payroll has been run for {out['month']} yet."
+    return (f"Payroll {out['month']} ({out['status']}): {out['employees']} employees, gross ₹{out['gross']:,}, "
+            f"deductions ₹{out['deductions']:,}, net ₹{out['net']:,}, employer cost ₹{out['employer_cost']:,}. "
+            f"TDS ₹{out['statutory']['tds']:,}, PF ₹{out['statutory']['pf_employee'] + out['statutory']['pf_employer']:,}.")
+
+
+def _amount(match):
+    """'12 lakh', '12 LPA', '1200000' -> rupees a year."""
+    n = float(match.group(1))
+    unit = (match.group(2) or "").strip()
+    if unit in ("lakh", "lpa", "l"):
+        return n * 100000
+    if unit in ("crore", "cr"):
+        return n * 10000000
+    return n * 100000 if n < 200 else n
+
+
 PLANS = {"policy": plan_policy, "leave": plan_leave, "onboarding": plan_onboarding, "screening": plan_screening,
-         "recruitment": plan_recruitment, "insights": plan_insights}
+         "recruitment": plan_recruitment, "insights": plan_insights, "payroll": plan_payroll}

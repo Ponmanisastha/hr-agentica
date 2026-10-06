@@ -11,6 +11,7 @@
   python app.py tickets list | show ID | work [ID] | approve ID | reject ID [--note TEXT] | sync
   python app.py budget [show] | budget set AGENT USD [--on-exceed downgrade|block]
   python app.py hiring ingest [--job JOB-101] | board | followups | rounds JOB-101 L1 L2 L3 HR Final | sample
+  python app.py payroll run|show|submit|paid REF|slip E101 [--month 2026-10]     salary and payroll
   python app.py insights [--job JOB-101] | attention | report | csv     HR analytics; csv prints the pipeline
   python app.py index                      rebuild vectors and the knowledge graph
   python app.py a2a send URL "<text>" --token T   call any A2A agent
@@ -98,6 +99,11 @@ def demo():
               "What is the hiring pipeline status?"]:
         print_result(r, G.handle(r, user=user, channel="cli"))
     print("=" * 78)
+    print("PAYROLL: salary breakup, a draft run, and the approval it waits on")
+    for r in ["What is the breakup for a 12 lakh CTC?", f"Run payroll for {config.today().strftime('%Y-%m')}",
+              "Submit the payroll for approval"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
     print("INSIGHTS: numbers and what needs attention (the web console's Dashboard shows the same)")
     for r in ["How is hiring going?", "What needs my attention today?"]:
         print_result(r, G.handle(r, user=user, channel="cli"))
@@ -122,6 +128,7 @@ def main(argv):
     p.add_argument("--token")
     p.add_argument("--demo-users", action="store_true")
     p.add_argument("--job", default="")
+    p.add_argument("--month", default="")
     a = p.parse_args(argv)
     cmd, args = a.cmd, a.args
 
@@ -237,6 +244,28 @@ def main(argv):
                 print(hiring.set_rounds(args[1], args[2:]))
             else:
                 print(hiring.summary(a.job or None))
+        finally:
+            auth._current.reset(token)
+    elif cmd == "payroll":
+        from hrai import payroll
+        from hrai import tools as T
+        sub = args[0] if args else "show"
+        month = a.month or ""
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "run":
+                print(json.dumps(T.run("run_payroll", month=month), indent=2, default=str))
+            elif sub == "submit":
+                print(json.dumps(T.run("submit_payroll", month=month), indent=2))
+            elif sub == "paid":
+                print(json.dumps(T.run("mark_payroll_paid", month=month, reference=args[1]), indent=2))
+            elif sub == "slip":
+                print(payroll.render_payslip(args[1], month) or "No payslip for that employee and month")
+            else:
+                s = payroll.summary(month)
+                print(json.dumps({k: v for k, v in s.items() if k != "payslips"}, indent=2, default=str))
+                for p in s.get("payslips", []):
+                    print(f"  {p['employee_id']:6} {p['name']:22} net {p['net']:>12,}")
         finally:
             auth._current.reset(token)
     elif cmd == "insights":

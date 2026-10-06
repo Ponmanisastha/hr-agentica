@@ -175,7 +175,26 @@ and tickets and feedback.
 - **Export.** `/api/insights/candidates.csv` (HR and admin only); cells that start with `=`, `+`, `-` or `@` are
   prefixed so resume text cannot run as a spreadsheet formula.
 
-## 11. Phases
+## 11. Salary and payroll (HR suite, phase 3)
+
+`hrai/payroll.py` with the rates in `data/payroll_rules.json` (not in code, because they change every financial year).
+
+- **Structure.** Basic 50% of CTC, HRA 50% of basic in a metro and 40% elsewhere, special allowance the rest.
+  Employer PF, employer ESI and gratuity sit inside CTC. ESI applies only while monthly gross is at or under ₹21,000.
+- **TDS.** Project the year's income from what has been paid so far plus the months left, compute the annual tax (new
+  regime by default; old regime takes 80C including PF, 80D, HRA exemption and professional tax), subtract TDS already
+  deducted, and spread the rest. No PAN means at least 20%. When a month is processed before earlier months of the
+  same financial year exist in the system, the payslip says so.
+- **Two approvals.** A salary revision waits for approval before it takes effect; a payroll run is submitted, and
+  whoever submitted it cannot approve it (checked in `decide_approval`). Approval writes the payslips and
+  `var/payroll/<month>/bank_transfer.csv` and drafts the payslip emails; HR pays through the bank and then records
+  the reference. A submitted month is locked against edits; an approved or paid month cannot be recomputed.
+- **Privacy.** `my_payslip` gives employees and managers only their own payslip, and only once approved. PAN, UAN and
+  bank account are masked everywhere. The bank file and payroll summary need `payroll:view` (HR and admin).
+- **Agent.** The payroll agent answers breakup, regime-comparison, run, submit, revision and payslip requests, and the
+  router sends salary wording to it. The dashboard and the needs-attention list pick up payroll state too.
+
+## 12. Phases
 
 | Phase | Content | Status |
 | --- | --- | --- |
@@ -186,13 +205,14 @@ and tickets and feedback.
 | 5 | Ticket tracker and auto-fix agent with PRs and human approval | Done |
 | 6 | Hiring pipeline: resume inbox, screening, L1..Ln/HR/Final rounds, offers, joining, follow-ups | Done (HR suite phase 1) |
 | 7 | Insights and analytics dashboard; UI redesign | Done (HR suite phase 2) |
-| 8 | Salary management (Indian payroll), project management, events and HR activities | Next |
-| 9 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Later |
-| 10 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
+| 8 | Salary management: CTC breakup, PF, ESI, professional tax, TDS, payslips, payroll approvals | Done (HR suite phase 3) |
+| 9 | Project management; cultural events and HR activities | Next |
+| 10 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Later |
+| 11 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
 
-## 12. What was tested, and what was not
+## 13. What was tested, and what was not
 
-**Tested (43 automated tests on Python 3.14.6, offline):**
+**Tested (57 automated tests on Python 3.14.6, offline):**
 - Login, hashing, lockout and roles
 - All four agents in rules-only mode
 - The LLM tool loop with a scripted model response
@@ -208,9 +228,15 @@ and tickets and feedback.
   joining and follow-ups, fail and hold, the web upload, and the triggers
 - Insights: funnel, rounds, missing skills, the attention list and its ordering, moot follow-ups closing, the
   insights agent and routing, the daily report, the dashboard API and CSV (including role checks and formula escaping)
+- Payroll: CTC breakup (metro and not, with and without ESI), professional tax by state, 87A rebate, surcharge,
+  no-PAN TDS, HRA exemption, LOP and one-off items, run to submit to approve to paid (including the submitter being
+  refused), TDS spread across months, revisions behind approval, payslip privacy and the web API
 - The full ticket workflow (gap → patch → worktree tests → review → approve → merge → closed, plus the reject and needs-human paths) in a repo where the app sits in a subfolder
 
 **Also checked by hand:** the MCP server over stdio with a real MCP client, the CrewAI wiring on Python 3.13 (crew assembly and tools, with the model call mocked), and MiniLM semantic search.
+
+The payroll figures follow the rules in `data/payroll_rules.json` and were checked against worked examples, but they
+have not been reviewed by a tax professional; confirm them with your CA before the first live run.
 
 **Not tested here:**
 - Live Claude calls, because there was no API key in the build environment.

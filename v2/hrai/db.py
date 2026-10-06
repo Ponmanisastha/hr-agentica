@@ -71,6 +71,21 @@ CREATE TABLE IF NOT EXISTS candidate_events (
 CREATE TABLE IF NOT EXISTS offers (
     id INTEGER PRIMARY KEY, candidate_id TEXT, job_id TEXT, ctc_lpa REAL, joining_date TEXT, status TEXT,
     approval_id INTEGER, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS salary_structures (
+    id INTEGER PRIMARY KEY, employee_id TEXT, ctc_annual REAL, effective_from TEXT, metro INTEGER DEFAULT 0,
+    regime TEXT DEFAULT 'new', pt_state TEXT, pan TEXT, uan TEXT, bank_account TEXT, ifsc TEXT, declarations TEXT,
+    breakup TEXT, status TEXT DEFAULT 'active', created_by TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS salary_revisions (
+    id INTEGER PRIMARY KEY, employee_id TEXT, old_ctc REAL, new_ctc REAL, pct REAL, effective_from TEXT, reason TEXT,
+    status TEXT DEFAULT 'pending_approval', approval_id INTEGER, requested_by TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS pay_adjustments (
+    id INTEGER PRIMARY KEY, employee_id TEXT, month TEXT, kind TEXT, amount REAL, note TEXT, created_by TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS payroll_runs (
+    id INTEGER PRIMARY KEY, month TEXT UNIQUE, status TEXT DEFAULT 'draft', approval_id INTEGER, submitted_by TEXT,
+    approved_by TEXT, paid_reference TEXT, paid_at TEXT, warnings TEXT, created_by TEXT, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS payslips (
+    id INTEGER PRIMARY KEY, run_id INTEGER, employee_id TEXT, month TEXT, gross REAL, total_deductions REAL, net REAL,
+    earnings TEXT, deductions TEXT, employer TEXT, paid_days REAL, lop_days REAL, notes TEXT);
 CREATE TABLE IF NOT EXISTS followups (
     id INTEGER PRIMARY KEY, candidate_id TEXT, due TEXT, kind TEXT, note TEXT, status TEXT DEFAULT 'open',
     created_at TEXT, done_at TEXT);
@@ -81,7 +96,7 @@ MIGRATIONS = {
     "candidates": {"phone": "TEXT", "skills": "TEXT", "years": "INTEGER", "file_hash": "TEXT", "source_path": "TEXT",
                    "stage": "TEXT DEFAULT 'applied'", "status_note": "TEXT", "created_at": "TEXT"},
     "jobs": {"rounds": "TEXT", "select_threshold": "INTEGER DEFAULT 70", "status": "TEXT DEFAULT 'open'"},
-    "new_hires": {"candidate_id": "TEXT"},
+    "new_hires": {"candidate_id": "TEXT", "employee_id": "TEXT"},
 }
 
 
@@ -171,3 +186,5 @@ def seed_sample_data():
           "created_at) VALUES (?,?,?,?,?,?,?,?,?)",
           (f"C-{i:03d}", path.name, name.group(1).strip() if name else path.stem,
            email.group(1).strip() if email else None, text, job["id"] if job else None, now(), "applied", now()))
+    from . import payroll
+    payroll.seed_sample_salaries()
