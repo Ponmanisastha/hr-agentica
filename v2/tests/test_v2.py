@@ -28,6 +28,16 @@ def setUpModule():
     bootstrap()
 
 
+class SettingsTests(unittest.TestCase):
+    def test_empty_folder_settings_use_the_defaults(self):
+        """.env.example leaves HRAI_POLICY_DIR and HRAI_INBOX empty; that must not mean the current folder."""
+        from hrai import hiring
+        from hrai.knowledge import policies
+        with mock.patch.dict(os.environ, {"HRAI_POLICY_DIR": "", "HRAI_INBOX": ""}):
+            self.assertEqual(policies.policy_dir(), config.ROOT / "policies")
+            self.assertEqual(hiring.inbox_root(), config.ROOT / "inbox")
+
+
 class AuthTests(unittest.TestCase):
     def test_password_is_hashed_and_login_works(self):
         row = db.q1("SELECT password_hash FROM users WHERE username='hr1'")

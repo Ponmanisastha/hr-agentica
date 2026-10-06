@@ -57,6 +57,9 @@ python app.py init --demo-users
 
 Optional, for model-written answers: put `ANTHROPIC_API_KEY=...` in `.env`, or install Ollama and
 `ollama pull llama3.1:8b`. To force the offline mode while you follow this guide, set `HRAI_MODE=mock` in `.env`.
+Nothing else needs installing: LangGraph, LiteLLM and Chroma are Python libraries that `pip` installs, not servers.
+Every v2 command runs from the `v2` folder; `python app.py` at the repository root is the older v1 prototype.
+[LOCAL_SETUP.md](LOCAL_SETUP.md) is a shorter walk-through with the output you should see at each step.
 
 ## 2. The sample pack
 
@@ -294,12 +297,16 @@ afterwards to go back. In the web portal, upload the file on **Policies** instea
 4. Click **New conversation** and ask "What did I just ask you?" again: "This is the first thing you have asked me
    in this conversation."
 
-**On the command line:** each `ask` is a new conversation, so test follow-ups in the web portal or over the API. To
-see what is remembered about a user:
+**On the command line:** each `ask` is a new conversation; `chat` keeps one conversation going, so follow-ups work:
 
 ```bash
-python app.py knowledge mag vignesh
+python app.py chat                       # type the three questions above, then exit
+python app.py knowledge mag vignesh      # long-term: what is remembered about a user
+python app.py knowledge mag vignesh "medical certificate"   # what the agent would recall for that question
 ```
+
+Command-line requests run as `cli:<your Linux user name>`, so use that name with `knowledge mag` (for example
+`knowledge mag cli:ponmani`), or add `--as vignesh` to `ask` and `chat`.
 
 With a model: tell the assistant "I prefer email over calls", start a new conversation, and ask "How should HR
 contact me about my leave?". The recalled memory is in the agent's prompt, so it answers by email.

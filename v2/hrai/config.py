@@ -23,7 +23,9 @@ _load_dotenv()
 
 
 def env(key, default=""):
-    return os.environ.get(key, default)
+    """A setting from the environment or .env. An empty value (`HRAI_POLICY_DIR=` as in .env.example) means
+    "not set", so the default applies instead of the current folder."""
+    return os.environ.get(key) or default
 
 
 def home() -> Path:

@@ -20,6 +20,7 @@ cat <<'NEXT'
 
 Done. Save the admin and demo passwords printed above. Next:
   source .venv/bin/activate
+  python app.py samples load         # sample policies, resumes, employees (see LOCAL_SETUP.md)
   python app.py demo                 # every agent on sample data
   python app.py serve                # http://localhost:8000 (log in as admin)
   python app.py triggers run         # scheduler: reminders, ticket sweep, budget watch, nightly reindex

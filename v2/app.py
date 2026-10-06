@@ -3,6 +3,7 @@
   python app.py init [--demo-users]        create the database, admin login, vectors, knowledge graph, git repo
   python app.py demo                       run sample requests through every agent, plus a ticket round trip
   python app.py ask "<request>" [--as USER] one request (as the local admin, or as USER after a password prompt)
+  python app.py chat [--as USER]           a conversation: follow-ups use the earlier turns (short-term memory)
   python app.py serve [--port 8000]        web console + HTTP API + A2A endpoints
   python app.py mcp [--http --port 8765]   MCP server (stdio by default); needs HRAI_MCP_TOKEN
   python app.py user add NAME ROLE [--employee E101] | user list
@@ -19,7 +20,7 @@
                      | rollback NAME VERSION | remove NAME | reindex     versioned HR policy documents
   python app.py documents [OWNER] | add OWNER TYPE FILE | verify ID | reject ID [--note TEXT]   employee documents
   python app.py samples [load]             load the sample pack: policies, resumes, employees, leave, salaries
-  python app.py knowledge rag|cag|kag "<question>" | kag rules | mag USER    see what each knowledge layer returns
+  python app.py knowledge rag|cag|kag "<question>" | kag rules | mag USER ["<q>"]  see what each knowledge layer returns
   python app.py index                      rebuild vectors and the knowledge graph
   python app.py a2a send URL "<text>" --token T   call any A2A agent
 """
@@ -180,6 +181,25 @@ def main(argv):
             print_result(req, G.handle(req, user=user, channel="cli"))
         except G.GatewayError as exc:
             print(f"Error: {exc}")
+    elif cmd == "chat":
+        import uuid
+        from hrai.gateway import agent_gateway as G
+        user = cli_user()
+        if a.as_user:
+            user = auth.user_for_token(auth.login(a.as_user, getpass.getpass(f"Password for {a.as_user}: ")))
+        conversation = "chat-" + uuid.uuid4().hex[:8]
+        print(f"Chatting as {user.username}. Follow-ups use this conversation; an empty line or 'exit' ends it.")
+        while True:
+            try:
+                req = input("\nyou> ").strip()
+            except EOFError:
+                break
+            if req.lower() in ("", "exit", "quit"):
+                break
+            try:
+                print_result(req, G.handle(req, user=user, channel="cli", conversation_id=conversation))
+            except G.GatewayError as exc:
+                print(f"Error: {exc}")
     elif cmd == "serve":
         from hrai import web
         web.serve(a.port or 8000)
@@ -453,10 +473,16 @@ def main(argv):
             for f in kag.facts_for(q)[:15]:
                 print(f"  {f['subject']} --{f['predicate']}--> {f['object']}   [{f['source']}]")
         elif sub == "mag":
-            for m in db.q("SELECT kind, text, ts FROM memories WHERE username=? ORDER BY id DESC LIMIT 10", (q.lower(),)):
-                print(f"  {m['ts']}  [{m['kind']}] {m['text'][:150]}")
+            who, question = (args[1].lower() if len(args) > 1 else ""), " ".join(args[2:])
+            if question:  # what the agent would recall for this question: semantic matches plus the latest turns
+                print(f"Long-term memories {who} brings to: {question}")
+                for t in mag.recall(who, question):
+                    print(f"  - {t[:150]}")
+            else:
+                for m in db.q("SELECT kind, text, ts FROM memories WHERE username=? ORDER BY id DESC LIMIT 10", (who,)):
+                    print(f"  {m['ts']}  [{m['kind']}] {m['text'][:150]}")
         else:
-            print('Usage: python app.py knowledge rag|cag|kag "<question>" | knowledge kag rules | knowledge mag USER')
+            print('Usage: python app.py knowledge rag|cag|kag "<question>" | knowledge kag rules | knowledge mag USER ["<question>"]')
     elif cmd == "samples":
         from hrai import samples
         if args[:1] != ["load"]:
