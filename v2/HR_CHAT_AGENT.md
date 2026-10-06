@@ -22,7 +22,7 @@ reasoning, and the trace shows the model's tool calls instead of the offline pla
 | Tool usage | Each answer carries its trace: every tool called, with its input and output. | Console → Assistant → **How I answered** under each answer |
 | Agent reasoning and workflow | The router picks a specialist (policy, leave, payroll, projects, culture…) from the request, offering only the agents your role may use. The leave agent decides whether you are *asking* (evaluate only, nothing booked) or *applying* (evaluate, record, draft emails, send exceptions to the manager's approval queue). | The trace and the agent name on each answer |
 | Context handling | Short-term: the last turns of the conversation (LangGraph checkpointer per conversation id), so "and sick leave?" after a casual-leave question answers for sick leave, and "what did I just ask?" works. Long-term: per-user memory (MAG, `hrai/knowledge/mag.py`). The user's identity, role and today's date are in every agent's prompt. **New conversation** in the console starts fresh. | Ask "How many casual leave days do we get?", then "and sick leave?" |
-| Response generation | Two to four sentences, grounded in tool output, with the policy cited. When the documents do not cover a question it says so and opens a ticket for HR rather than guessing (`hrai/ops/tracker.py`). | "Is there a policy on pet insurance?" |
+| Response generation | Two to four sentences, grounded in tool output, with the policy cited. When the documents do not cover a question it says so and opens a ticket for HR rather than guessing (`hrai/ops/tracker.py`). | "Is there a policy on sabbaticals?" |
 | Safety | Prompt-injection guard and PII redaction in hooks (`hrai/hooks.py`). Rate limiting and per-agent AI budgets (`hrai/gateway/`). Emails are only drafted, never sent. | `DESIGN.md` §8 |
 
 ## Where your own HR policy documents go
@@ -82,7 +82,7 @@ From the command line, the same flow runs with `python app.py ask "What is my le
 
 ## Tests
 
-`python -m unittest discover -s tests -t .` runs 96 offline tests. `tests/test_chat_agent.py` covers this brief:
+`python -m unittest discover -s tests -t .` runs 104 offline tests. `tests/test_chat_agent.py` covers this brief:
 your own documents replacing the sample and driving the rules, Word and unstructured files, the watch trigger,
 balances and accrual, questions that book nothing, applying, employee isolation, follow-ups, conversation
 memory, routing, and the Policies API.
