@@ -1,0 +1,3 @@
+Inbound call IN-071022-893 from E101
+E101: how many sick days do I have left, and do I need a medical certificate?
+AGENT: You have 6 sick leave days left. Employees get 8 days of paid sick leave per year. Sick leave needs no advance notice. Absences of more than 2 consecutive working days need a medical certificate, uploaded within 3 days of returning to work.

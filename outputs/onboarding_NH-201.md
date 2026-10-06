@@ -1,0 +1,16 @@
+# Onboarding plan: Priya Raman (NH-201)
+
+Role: Backend Engineer, Engineering. Manager: Arun Kumar. Start date: 2026-10-19.
+
+Missing documents: none
+
+| Due | Owner | Task | Status |
+| --- | --- | --- | --- |
+| 2026-10-12 | HR | Send welcome email with joining details and document checklist | to do |
+| 2026-10-14 | IT | Create email, Slack and HRMS accounts; ship laptop for Backend Engineer | to do |
+| 2026-10-16 | Payroll | Set up payroll and statutory registrations | to do |
+| 2026-10-18 | Arun Kumar | Assign onboarding buddy and first-week goals | to do |
+| 2026-10-19 | HR | Day-1 orientation: policies, benefits, security training | to do |
+| 2026-10-20 | Arun Kumar | Team introduction and role walkthrough | to do |
+| 2026-11-18 | Arun Kumar | 30-day check-in | to do |
+| 2027-01-17 | HR | 90-day probation review | to do |

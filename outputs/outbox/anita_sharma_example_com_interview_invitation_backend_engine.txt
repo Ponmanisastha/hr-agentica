@@ -1,0 +1,10 @@
+To: anita.sharma@example.com
+Subject: Interview invitation: Backend Engineer
+Status: DRAFT - needs human review before sending
+
+Dear Anita Sharma,
+
+Thank you for applying for Backend Engineer. We would like to invite you to a 45-minute technical interview. Please reply with three slots that suit you this week.
+
+Regards,
+Talent Acquisition

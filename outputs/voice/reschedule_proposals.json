@@ -1,0 +1,29 @@
+[
+  {
+    "interview_id": "INT-302",
+    "new_date": "2026-10-09",
+    "new_time": "10:00",
+    "requested_by": "Meera Iyer (candidate)",
+    "reason": "Ah, I have a clash at that time. Could we move it? I'm free on Friday 9 October at 10:00 or Monday 12 October at 16:00.",
+    "status": "awaiting HR approval",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "interview_id": "INT-303",
+    "new_date": "2026-10-12",
+    "new_time": "10:00",
+    "requested_by": "Arun Kumar (interviewer)",
+    "reason": "I'm travelling that day, so I can't do Fatima's interview. Please move it.",
+    "status": "awaiting HR approval",
+    "recorded_at": "2026-10-06T07:10:20"
+  },
+  {
+    "interview_id": "INT-299",
+    "new_date": "2026-10-12",
+    "new_time": "14:00",
+    "requested_by": "Arjun Mehta (candidate)",
+    "reason": "Sorry, I missed it because of a family emergency. Could I get another slot? Monday 12 October at 10:00 or Monday 12 October at 14:00 works for me.",
+    "status": "awaiting HR approval",
+    "recorded_at": "2026-10-06T07:10:21"
+  }
+]

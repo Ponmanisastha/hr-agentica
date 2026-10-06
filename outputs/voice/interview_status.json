@@ -1,0 +1,58 @@
+[
+  {
+    "interview_id": "INT-301",
+    "party": "candidate",
+    "status": "confirmed",
+    "note": "",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "interview_id": "INT-301",
+    "party": "interviewer",
+    "status": "confirmed",
+    "note": "",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "interview_id": "INT-302",
+    "party": "candidate",
+    "status": "wants_reschedule",
+    "note": "Ah, I have a clash at that time. Could we move it? I'm free on Friday 9 October at 10:00 or Monday 12 October at 16:00.",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "interview_id": "INT-302",
+    "party": "interviewer",
+    "status": "confirmed",
+    "note": "",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "interview_id": "INT-303",
+    "party": "candidate",
+    "status": "no_answer",
+    "note": "",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "interview_id": "INT-303",
+    "party": "interviewer",
+    "status": "wants_reschedule",
+    "note": "I'm travelling that day, so I can't do Fatima's interview. Please move it.",
+    "recorded_at": "2026-10-06T07:10:20"
+  },
+  {
+    "interview_id": "INT-298",
+    "party": "candidate",
+    "status": "question_answered",
+    "note": "It went well, thank you. When will I hear back about the result?",
+    "recorded_at": "2026-10-06T07:10:21"
+  },
+  {
+    "interview_id": "INT-299",
+    "party": "candidate",
+    "status": "wants_reschedule",
+    "note": "Sorry, I missed it because of a family emergency. Could I get another slot? Monday 12 October at 10:00 or Monday 12 October at 14:00 works for me.",
+    "recorded_at": "2026-10-06T07:10:21"
+  }
+]

@@ -1,0 +1,83 @@
+[
+  {
+    "call_id": "CALL-071019-412",
+    "to": "Anita Sharma",
+    "phone": "+91-90000-00001",
+    "context": "INT-301",
+    "status": "answered",
+    "reply": "Yes, I'll be there. Thanks for the reminder.",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "call_id": "CALL-071019-542",
+    "to": "Arun Kumar",
+    "phone": "+91-90000-00101",
+    "context": "INT-301",
+    "status": "answered",
+    "reply": "Confirmed, I'll take it.",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "call_id": "CALL-071019-590",
+    "to": "Meera Iyer",
+    "phone": "+91-90000-00002",
+    "context": "INT-302",
+    "status": "answered",
+    "reply": "Ah, I have a clash at that time. Could we move it? I'm free on Friday 9 October at 10:00 or Monday 12 October at 16:00.",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "call_id": "CALL-071019-240",
+    "to": "Ravi Shankar",
+    "phone": "+91-90000-00102",
+    "context": "INT-302",
+    "status": "answered",
+    "reply": "Fine, I'll be there.",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "call_id": "CALL-071019-650",
+    "to": "Fatima Khan",
+    "phone": "+91-90000-00003",
+    "context": "INT-303",
+    "status": "no_answer",
+    "reply": null,
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "call_id": "CALL-071019-022",
+    "to": "Arun Kumar",
+    "phone": "+91-90000-00101",
+    "context": "INT-303",
+    "status": "answered",
+    "reply": "I'm travelling that day, so I can't do Fatima's interview. Please move it.",
+    "recorded_at": "2026-10-06T07:10:19"
+  },
+  {
+    "call_id": "CALL-071021-276",
+    "to": "Sneha Rao",
+    "phone": "+91-90000-00004",
+    "context": "INT-298",
+    "status": "answered",
+    "reply": "It went well, thank you. When will I hear back about the result?",
+    "recorded_at": "2026-10-06T07:10:21"
+  },
+  {
+    "call_id": "CALL-071021-178",
+    "to": "Arjun Mehta",
+    "phone": "+91-90000-00005",
+    "context": "INT-299",
+    "status": "answered",
+    "reply": "Sorry, I missed it because of a family emergency. Could I get another slot? Monday 12 October at 10:00 or Monday 12 October at 14:00 works for me.",
+    "recorded_at": "2026-10-06T07:10:21"
+  },
+  {
+    "call_id": "IN-071022-893",
+    "to": "inbound",
+    "phone": "E101",
+    "context": "query",
+    "status": "answered",
+    "reply": "how many sick days do I have left, and do I need a medical certificate?",
+    "recorded_at": "2026-10-06T07:10:22"
+  }
+]

@@ -1,0 +1,8 @@
+Name: John D'Souza
+Email: john.dsouza@example.com
+Years of experience: 6
+Summary: Java backend engineer.
+Skills: Java, Spring Boot, REST API, SQL, Oracle, Kubernetes
+Experience:
+- 2020-2026 Software Engineer II, BankSoft: core banking REST services in Java.
+Education: B.E. Computer Science

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "NH-201",
+    "name": "Priya Raman",
+    "email": "priya.raman@example.com",
+    "role": "Backend Engineer",
+    "department": "Engineering",
+    "manager": "Arun Kumar",
+    "start_date": "2026-10-19",
+    "documents_submitted": ["offer_letter_signed", "id_proof", "pan_card", "address_proof", "bank_details", "education_certificates", "nda_signed", "relieving_letter"]
+  },
+  {
+    "id": "NH-202",
+    "name": "Vikram Singh",
+    "email": "vikram.singh@example.com",
+    "role": "HR Executive",
+    "department": "Human Resources",
+    "manager": "Lakshmi Menon",
+    "start_date": "2026-10-26",
+    "documents_submitted": ["offer_letter_signed", "id_proof"]
+  }
+]

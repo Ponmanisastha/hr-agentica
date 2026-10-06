@@ -1,0 +1,10 @@
+{
+  "_note": "What each simulated person says when the voice agent calls. Keyed by phone, then interview id or '*'. null means the call is not answered. {slot:N,HH:MM} is replaced with the date N business days from today.",
+  "+91-90000-00001": {"*": "Yes, I'll be there. Thanks for the reminder."},
+  "+91-90000-00002": {"*": "Ah, I have a clash at that time. Could we move it? I'm free on {slot:3,10:00} or {slot:4,16:00}."},
+  "+91-90000-00003": {"*": null},
+  "+91-90000-00004": {"*": "It went well, thank you. When will I hear back about the result?"},
+  "+91-90000-00005": {"*": "Sorry, I missed it because of a family emergency. Could I get another slot? {slot:4,10:00} or {slot:4,14:00} works for me."},
+  "+91-90000-00101": {"INT-301": "Confirmed, I'll take it.", "INT-303": "I'm travelling that day, so I can't do Fatima's interview. Please move it."},
+  "+91-90000-00102": {"*": "Fine, I'll be there."}
+}

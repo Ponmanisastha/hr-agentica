@@ -1,0 +1,4 @@
+Call CALL-071019-022 to Arun Kumar (+91-90000-00101) via simulated, about INT-303
+AGENT: Hello Arun, this is the HR assistant calling about your interview of Fatima Khan on Friday 9 October at 11:00, in person, chennai office. Can you confirm you'll be there?
+ARUN KUMAR: I'm travelling that day, so I can't do Fatima's interview. Please move it.
+AGENT: Thanks, Arun. Your next free slot is Monday 12 October at 10:00. I've passed that to HR to approve, and we'll check it with the candidate.

@@ -1,0 +1,41 @@
+[
+  {
+    "employee": "Deepa Nair",
+    "employee_id": "E101",
+    "employee_email": "deepa.nair@example.com",
+    "manager": "Arun Kumar",
+    "manager_email": "arun.kumar@example.com",
+    "leave_type": "annual",
+    "start_date": "2026-10-20",
+    "end_date": "2026-10-22",
+    "working_days": 2,
+    "balance_before": 12,
+    "balance_after": 10,
+    "notice_days": 14,
+    "decision": "approve",
+    "reasons": [],
+    "note": "",
+    "recorded_at": "2026-10-06T07:10:16"
+  },
+  {
+    "employee": "Sanjay Patel",
+    "employee_id": "E102",
+    "employee_email": "sanjay.patel@example.com",
+    "manager": "Arun Kumar",
+    "manager_email": "arun.kumar@example.com",
+    "leave_type": "annual",
+    "start_date": "2026-10-09",
+    "end_date": "2026-10-15",
+    "working_days": 5,
+    "balance_before": 2,
+    "balance_after": 2,
+    "notice_days": 3,
+    "decision": "route_to_manager",
+    "reasons": [
+      "Needs 5 days but only 2 annual days left",
+      "Only 3 days' notice; policy section 1 asks for 7"
+    ],
+    "note": "",
+    "recorded_at": "2026-10-06T07:10:17"
+  }
+]

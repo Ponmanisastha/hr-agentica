@@ -1,0 +1,9 @@
+Name: Meera Iyer
+Email: meera.iyer@example.com
+Years of experience: 7
+Summary: Platform engineer focused on scalable services.
+Skills: Python, Go, SQL, REST API, gRPC, Kubernetes, Docker, AWS, Terraform
+Experience:
+- 2020-2026 Lead Engineer, CloudScale: led migration of 40 services to Kubernetes.
+- 2019-2020 Backend Developer, ShopKart: REST API for catalogue.
+Education: M.Tech Software Engineering, IIT Madras

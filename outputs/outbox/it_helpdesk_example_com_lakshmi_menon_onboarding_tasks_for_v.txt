@@ -1,0 +1,17 @@
+To: it-helpdesk@example.com, Lakshmi Menon
+Subject: Onboarding tasks for Vikram Singh (2026-10-26)
+Status: DRAFT - needs human review before sending
+
+Please action the following for Vikram Singh:
+
+- 2026-10-19 HR: Send welcome email with joining details and document checklist (to do)
+- 2026-10-21 IT: Create email, Slack and HRMS accounts; ship laptop for HR Executive (to do)
+- 2026-10-23 Payroll: Set up payroll and statutory registrations (blocked: missing documents)
+- 2026-10-23 HR: Collect missing documents (to do)
+- 2026-10-25 Lakshmi Menon: Assign onboarding buddy and first-week goals (to do)
+- 2026-10-26 HR: Day-1 orientation: policies, benefits, security training (to do)
+- 2026-10-27 Lakshmi Menon: Team introduction and role walkthrough (to do)
+- 2026-11-25 Lakshmi Menon: 30-day check-in (to do)
+- 2027-01-24 HR: 90-day probation review (to do)
+
+HR

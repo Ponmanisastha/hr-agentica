@@ -1,0 +1,19 @@
+{
+  "_note": "Interview dates are stored as business-day offsets from today so the demo always has upcoming and past interviews.",
+  "interviews": [
+    {"id": "INT-301", "job_id": "JOB-101", "candidate": "Anita Sharma", "candidate_phone": "+91-90000-00001", "candidate_email": "anita.sharma@example.com",
+     "interviewer": "Arun Kumar", "interviewer_phone": "+91-90000-00101", "day_offset": 2, "time": "10:00", "mode": "Video call", "status": "scheduled"},
+    {"id": "INT-302", "job_id": "JOB-101", "candidate": "Meera Iyer", "candidate_phone": "+91-90000-00002", "candidate_email": "meera.iyer@example.com",
+     "interviewer": "Ravi Shankar", "interviewer_phone": "+91-90000-00102", "day_offset": 2, "time": "14:00", "mode": "Video call", "status": "scheduled"},
+    {"id": "INT-303", "job_id": "JOB-101", "candidate": "Fatima Khan", "candidate_phone": "+91-90000-00003", "candidate_email": "fatima.khan@example.com",
+     "interviewer": "Arun Kumar", "interviewer_phone": "+91-90000-00101", "day_offset": 3, "time": "11:00", "mode": "In person, Chennai office", "status": "scheduled"},
+    {"id": "INT-298", "job_id": "JOB-101", "candidate": "Sneha Rao", "candidate_phone": "+91-90000-00004", "candidate_email": "sneha.rao@example.com",
+     "interviewer": "Ravi Shankar", "interviewer_phone": "+91-90000-00102", "day_offset": -1, "time": "15:00", "mode": "Video call", "status": "attended"},
+    {"id": "INT-299", "job_id": "JOB-101", "candidate": "Arjun Mehta", "candidate_phone": "+91-90000-00005", "candidate_email": "arjun.mehta@example.com",
+     "interviewer": "Arun Kumar", "interviewer_phone": "+91-90000-00101", "day_offset": -1, "time": "11:00", "mode": "Video call", "status": "no_show"}
+  ],
+  "interviewer_free_slots": {
+    "Arun Kumar": [[3, "15:00"], [4, "10:00"], [4, "14:00"], [5, "11:00"]],
+    "Ravi Shankar": [[3, "10:00"], [4, "16:00"], [5, "11:00"]]
+  }
+}

@@ -1,0 +1,9 @@
+To: deepa.nair@example.com
+Subject: Your annual leave request
+Status: DRAFT - needs human review before sending
+
+Hi Deepa,
+
+Your annual leave from 2026-10-20 to 2026-10-22 (2 working days) is approved. Remaining annual balance: 10 days.
+
+HR Helpdesk

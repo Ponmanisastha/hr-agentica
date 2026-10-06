@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HR Agent Console</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --ink:#1d1d1b; --muted:#6b6b66; --line:#e3e2dd; --accent:#3b5bdb; --ok:#2b8a3e; --warn:#c2410c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --card:#1f1f1d; --ink:#ecebe6; --muted:#a3a29c; --line:#34332f; --accent:#7b93ff; --ok:#69db7c; --warn:#ffa94d; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  textarea { width: 100%; min-height: 70px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+  button { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 6px 10px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding: 8px 16px; }
+  .samples { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .samples button { font-size: 13px; text-align: left; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  pre { white-space: pre-wrap; margin: 0; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  ol.trace { padding-left: 20px; margin: 0; font-size: 13px; }
+  ol.trace li { margin: 4px 0; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--accent); }
+  details summary { cursor: pointer; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>HR Agent Console</h1>
+  <p class="sub">Type an HR request. The orchestrator routes it to the screening, onboarding, or leave and policy agent, which uses its tools to finish the job.</p>
+  <div class="card">
+    <textarea id="req" placeholder="e.g. Screen all resumes for the Backend Engineer opening"></textarea>
+    <div class="samples" id="samples"></div>
+    <button class="primary" id="run">Run agent</button>
+  </div>
+  <div id="out"></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+fetch('/api/samples').then(r => r.json()).then(list => list.forEach(t => {
+  const b = document.createElement('button'); b.textContent = t; b.onclick = () => { $('#req').value = t; run(); }; $('#samples').appendChild(b);
+}));
+async function run() {
+  const request = $('#req').value.trim(); if (!request) return;
+  $('#run').disabled = true; $('#run').textContent = 'Working...';
+  try {
+    const res = await (await fetch('/api/run', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({request})})).json();
+    const steps = res.trace.map(s => `<li><code>${esc(s.tool)}</code> ${esc(JSON.stringify(s.input)).slice(0, 160)}<details><summary>output</summary><pre>${esc(JSON.stringify(s.output, null, 2))}</pre></details></li>`).join('');
+    const card = document.createElement('div'); card.className = 'card';
+    card.innerHTML = `<div class="meta">${esc(request)}<br>Handled by <b>${esc(res.agent)}</b> · mode: ${esc(res.mode)} · ${res.trace.length} tool calls</div><pre>${esc(res.result)}</pre><details style="margin-top:10px"><summary>Agent steps</summary><ol class="trace">${steps}</ol></details>`;
+    $('#out').prepend(card);
+  } catch (e) { alert('Request failed: ' + e); }
+  $('#run').disabled = false; $('#run').textContent = 'Run agent';
+}
+$('#run').onclick = run;
+</script>
+</body>
+</html>

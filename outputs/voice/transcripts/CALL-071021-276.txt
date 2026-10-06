@@ -1,0 +1,4 @@
+Call CALL-071021-276 to Sneha Rao (+91-90000-00004) via simulated, about INT-298
+AGENT: Hello Sneha, this is the HR assistant. Thank you for attending your interview on Monday 5 October at 15:00. How did it go, and do you have any questions about next steps?
+SNEHA RAO: It went well, thank you. When will I hear back about the result?
+AGENT: Candidates hear back within 3 working days of their interview, by email and a call from the recruiter.

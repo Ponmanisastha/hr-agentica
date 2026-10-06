@@ -1,0 +1,4 @@
+Call CALL-071021-178 to Arjun Mehta (+91-90000-00005) via simulated, about INT-299
+AGENT: Hello Arjun, this is the HR assistant. We missed you at your interview on Monday 5 October at 11:00. I hope everything is okay. Would you like another slot?
+ARJUN MEHTA: Sorry, I missed it because of a family emergency. Could I get another slot? Monday 12 October at 10:00 or Monday 12 October at 14:00 works for me.
+AGENT: Thanks, Arjun. Arun Kumar is free on Monday 12 October at 14:00. I've passed that to HR to approve, and you'll get a confirmation by email.

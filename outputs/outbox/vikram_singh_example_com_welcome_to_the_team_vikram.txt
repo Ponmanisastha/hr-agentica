@@ -1,0 +1,10 @@
+To: vikram.singh@example.com
+Subject: Welcome to the team, Vikram!
+Status: DRAFT - needs human review before sending
+
+Hi Vikram,
+
+We are excited to have you join as HR Executive on 2026-10-26. Your manager will be Lakshmi Menon. Day 1 starts at 9:30 with orientation.
+
+Warm regards,
+HR

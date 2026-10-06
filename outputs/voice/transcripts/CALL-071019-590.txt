@@ -1,0 +1,4 @@
+Call CALL-071019-590 to Meera Iyer (+91-90000-00002) via simulated, about INT-302
+AGENT: Hello Meera, this is the HR assistant calling about your interview with Ravi Shankar on Thursday 8 October at 14:00, video call. Can you confirm you'll be there?
+MEERA IYER: Ah, I have a clash at that time. Could we move it? I'm free on Friday 9 October at 10:00 or Monday 12 October at 16:00.
+AGENT: Thanks, Meera. Ravi Shankar is free on Friday 9 October at 10:00. I've passed that to HR to approve, and you'll get a confirmation by email.

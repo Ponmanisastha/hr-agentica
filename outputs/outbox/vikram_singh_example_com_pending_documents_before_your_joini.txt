@@ -1,0 +1,10 @@
+To: vikram.singh@example.com
+Subject: Pending documents before your joining date
+Status: DRAFT - needs human review before sending
+
+Hi Vikram,
+
+To complete your onboarding, please upload: pan_card, address_proof, bank_details, education_certificates, nda_signed, relieving_letter. Payroll cannot be set up until bank details and PAN are received.
+
+Thanks,
+HR

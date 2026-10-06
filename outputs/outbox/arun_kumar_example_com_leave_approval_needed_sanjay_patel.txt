@@ -1,0 +1,5 @@
+To: arun.kumar@example.com
+Subject: Leave approval needed: Sanjay Patel
+Status: DRAFT - needs human review before sending
+
+Sanjay Patel requested annual leave 2026-10-09 to 2026-10-15 (5 working days). Auto-approval was not possible: Needs 5 days but only 2 annual days left; Only 3 days' notice; policy section 1 asks for 7. Please approve or decline in the HRMS.

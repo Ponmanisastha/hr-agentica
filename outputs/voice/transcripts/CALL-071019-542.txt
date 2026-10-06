@@ -1,0 +1,4 @@
+Call CALL-071019-542 to Arun Kumar (+91-90000-00101) via simulated, about INT-301
+AGENT: Hello Arun, this is the HR assistant calling about your interview of Anita Sharma on Thursday 8 October at 10:00, video call. Can you confirm you'll be there?
+ARUN KUMAR: Confirmed, I'll take it.
+AGENT: Thank you, Arun. See you then.

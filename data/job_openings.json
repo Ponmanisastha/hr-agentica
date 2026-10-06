@@ -1,0 +1,11 @@
+[
+  {
+    "id": "JOB-101",
+    "title": "Backend Engineer",
+    "location": "Chennai (hybrid)",
+    "min_years": 3,
+    "must_have": ["python", "sql", "rest api"],
+    "nice_to_have": ["aws", "docker", "kubernetes", "postgresql"],
+    "shortlist_size": 3
+  }
+]

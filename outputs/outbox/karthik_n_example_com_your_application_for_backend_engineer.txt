@@ -1,0 +1,10 @@
+To: karthik.n@example.com
+Subject: Your application for Backend Engineer
+Status: DRAFT - needs human review before sending
+
+Dear Karthik N,
+
+Thank you for your interest in Backend Engineer. After careful review we will not be moving forward at this time. We will keep your profile for future openings.
+
+Regards,
+Talent Acquisition

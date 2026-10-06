@@ -1,0 +1,4 @@
+Call CALL-071019-412 to Anita Sharma (+91-90000-00001) via simulated, about INT-301
+AGENT: Hello Anita, this is the HR assistant calling about your interview with Arun Kumar on Thursday 8 October at 10:00, video call. Can you confirm you'll be there?
+ANITA SHARMA: Yes, I'll be there. Thanks for the reminder.
+AGENT: Thank you, Anita. See you then.
