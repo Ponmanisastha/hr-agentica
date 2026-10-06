@@ -349,6 +349,10 @@
           </div>
           <div id="polList"></div>
         </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-head"><div><h3>Rules read from these documents</h3><div class="sub">The leave engine and the assistant use these numbers. Edit the document and re-index to change them.</div></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Rule</th><th class="num">Value</th><th>Read from</th></tr></thead><tbody id="polRules"></tbody></table></div>
+        </div>
       </section>
 
       <!-- culture -->
@@ -691,7 +695,8 @@ const short = v => { const t = typeof v === 'string' ? v : JSON.stringify(v); re
 function steps(r) {
   // The agent's workflow for this answer: which agent, how it ran, and every tool it called with what.
   const d = el('details'); d.style.marginTop = '8px';
-  d.append(el('summary', `How I answered: ${r.agent} agent · ${r.mode === 'rules' ? 'offline planner' : r.mode} · ${r.trace.length} step${r.trace.length === 1 ? '' : 's'}`));
+  const mode = {rules:'offline planner', cache:'cached answer (CAG)', memory:'conversation memory'}[r.mode] || r.mode;
+  d.append(el('summary', `How I answered: ${r.agent} agent · ${mode} · ${r.trace.length} step${r.trace.length === 1 ? '' : 's'}`));
   const ol = el('ol'); ol.style.cssText = 'margin:8px 0 0;padding-left:20px';
   r.trace.forEach(t => { const li = el('li'); li.style.marginBottom = '6px';
     li.append(el('code', t.tool), el('span', ' ' + short(t.input), 'muted'));
@@ -745,6 +750,13 @@ function drawPolicies(d) {
       det.append(del);
     }
     box.append(det);
+  });
+  const rb = $('polRules'); rb.replaceChildren();
+  (d.rules || []).forEach(r => {
+    const tr = el('tr');
+    tr.append(el('td', r.rule), el('td', r.value ?? '', 'num'),
+              el('td', r.source || 'Not found in your documents, so a default is used', r.source ? 'muted' : ''));
+    rb.append(tr);
   });
 }
 $('polFiles').onchange = async e => {

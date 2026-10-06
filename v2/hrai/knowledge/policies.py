@@ -157,5 +157,6 @@ def summary():
     by_doc = {}
     for s in sections():
         by_doc.setdefault(s["meta"]["source"], []).append(s["meta"]["section"])
+    from . import kag
     return {"folder": str(policy_dir()), "using_sample": not own_documents(),
-            "documents": [{"name": k, "sections": v} for k, v in by_doc.items()]}
+            "documents": [{"name": k, "sections": v} for k, v in by_doc.items()], "rules": kag.rules()}

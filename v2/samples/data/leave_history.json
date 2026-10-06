@@ -1,0 +1,202 @@
+[
+ {
+  "employee_id": "E104",
+  "leave_type": "annual",
+  "start_date": "2026-03-09",
+  "end_date": "2026-03-13",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E104",
+  "leave_type": "sick",
+  "start_date": "2026-07-21",
+  "end_date": "2026-07-21",
+  "working_days": 1,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E105",
+  "leave_type": "annual",
+  "start_date": "2026-05-18",
+  "end_date": "2026-05-29",
+  "working_days": 10,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E106",
+  "leave_type": "casual",
+  "start_date": "2026-02-05",
+  "end_date": "2026-02-06",
+  "working_days": 2,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E106",
+  "leave_type": "sick",
+  "start_date": "2026-08-10",
+  "end_date": "2026-08-12",
+  "working_days": 3,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E106",
+  "leave_type": "annual",
+  "start_date": "2026-09-21",
+  "end_date": "2026-09-25",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E107",
+  "leave_type": "casual",
+  "start_date": "2026-08-28",
+  "end_date": "2026-08-28",
+  "working_days": 1,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E108",
+  "leave_type": "annual",
+  "start_date": "2026-04-06",
+  "end_date": "2026-04-10",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E108",
+  "leave_type": "annual",
+  "start_date": "2026-06-15",
+  "end_date": "2026-06-19",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E108",
+  "leave_type": "annual",
+  "start_date": "2026-09-07",
+  "end_date": "2026-09-11",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E108",
+  "leave_type": "casual",
+  "start_date": "2026-01-16",
+  "end_date": "2026-01-16",
+  "working_days": 1,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E109",
+  "leave_type": "sick",
+  "start_date": "2026-03-02",
+  "end_date": "2026-03-03",
+  "working_days": 2,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E110",
+  "leave_type": "annual",
+  "start_date": "2026-04-27",
+  "end_date": "2026-04-30",
+  "working_days": 4,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E110",
+  "leave_type": "casual",
+  "start_date": "2026-07-02",
+  "end_date": "2026-07-03",
+  "working_days": 2,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E111",
+  "leave_type": "sick",
+  "start_date": "2026-01-19",
+  "end_date": "2026-01-23",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E111",
+  "leave_type": "casual",
+  "start_date": "2026-06-11",
+  "end_date": "2026-06-12",
+  "working_days": 2,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E111",
+  "leave_type": "casual",
+  "start_date": "2026-09-03",
+  "end_date": "2026-09-04",
+  "working_days": 2,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E111",
+  "leave_type": "casual",
+  "start_date": "2026-09-24",
+  "end_date": "2026-09-25",
+  "working_days": 2,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E112",
+  "leave_type": "annual",
+  "start_date": "2026-02-16",
+  "end_date": "2026-02-20",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E112",
+  "leave_type": "annual",
+  "start_date": "2026-05-04",
+  "end_date": "2026-05-08",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E112",
+  "leave_type": "sick",
+  "start_date": "2026-09-29",
+  "end_date": "2026-09-29",
+  "working_days": 1,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E114",
+  "leave_type": "annual",
+  "start_date": "2026-08-17",
+  "end_date": "2026-08-21",
+  "working_days": 5,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E114",
+  "leave_type": "casual",
+  "start_date": "2026-04-13",
+  "end_date": "2026-04-13",
+  "working_days": 1,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E115",
+  "leave_type": "annual",
+  "start_date": "2026-01-12",
+  "end_date": "2026-01-16",
+  "working_days": 4,
+  "status": "approved"
+ },
+ {
+  "employee_id": "E115",
+  "leave_type": "sick",
+  "start_date": "2026-06-01",
+  "end_date": "2026-06-02",
+  "working_days": 2,
+  "status": "approved"
+ }
+]

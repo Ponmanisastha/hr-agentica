@@ -9,6 +9,7 @@ How an agent runs (run_agent):
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 from .. import auth, config, db, skills
 from .. import tools as T
@@ -209,13 +210,13 @@ def plan_policy(run, request):
     if re.match(r"\s*(who|whom)\b", request, re.I) and facts:
         return "From the HR knowledge graph: " + "; ".join(
             f"{f['subject']} {f['predicate'].replace('_', ' ')} {f['object']}" for f in facts[:6]) + "."
-    generic = {"policy", "leave", "day", "employee", "company", "offer", "rule", "allowed", "get", "have", "there"}
-    asked = vectors._keywords(request) - generic
+    generic = vectors._keywords("policy leave day employee company offer rule allowed get have there")
+    asked = vectors._keywords(vectors.expand(request)) - generic
     if not hits or (asked and not asked & vectors._keywords(hits[0]["text"])):
         return "I couldn't find this in our policy documents. Please contact HR at hr@example.com."
     top = hits[0]
     body = top["text"].split("\n", 1)[1] if "\n" in top["text"] else top["text"]
-    answer = body
+    answer = re.sub(r"(?<!\n)\n(?!\n|- )", " ", body)  # rejoin lines a PDF broke mid-sentence; keep lists
     user = auth.current_user()
     if user.employee_id and re.search(r"\b(my|i|me)\b", request, re.I) and "notice period" in request.lower():
         me = run.call("get_employee", employee_id=user.employee_id)
@@ -288,9 +289,11 @@ def plan_leave(run, request):
         if "error" in ev:
             return ev["error"]
         span = f"{lt} leave from {dates[0]} to {dates[-1]}"
+        after = ev["balance_before"] - ev["working_days"]
         msg = (f"That {span} uses {ev['working_days']} working day{'s' if ev['working_days'] != 1 else ''} "
-               f"(weekends and public holidays are not counted), leaving {ev['balance_before'] - ev['working_days']:g} "
-               f"of your {ev['balance_before']:g} {lt} days. ")
+               f"(weekends and public holidays are not counted), "
+               + (f"leaving {after:g} of your {ev['balance_before']:g} {lt} days. " if after >= 0 else
+                  f"but you have only {ev['balance_before']:g} {lt} day{'s' if ev['balance_before'] != 1 else ''} left. "))
         if ev["decision"] == "approve":
             msg += "It would be approved automatically."
         else:
@@ -483,11 +486,16 @@ def plan_payroll(run, request):
             return out.get("error") or (f"Proposed ₹{out['old_ctc']:,} to ₹{out['new_ctc']:,} ({out['pct']:+}%) from "
                                         f"{out['effective_from']}. Waiting for approval #{out['approval_id']}.")
     if re.search(r"salary|ctc|structures", t) and re.search(r"everyone|all|list|structures", t):
-        rows = run.call("salary_structures")["employees"]
+        out = run.call("salary_structures")
+        if "error" in out:
+            return out["error"]
+        rows = out["employees"]
         return "\n".join(f"{r['name']} ({r['id']}): " + (f"₹{r['ctc_annual']:,} CTC, ₹{r['monthly_gross']:,} gross a month, "
                           f"{r['regime']} regime" + (f", missing {', '.join(r['missing'])}" if r["missing"] else "")
                           if r["ctc_annual"] else "no salary set up")
                          for r in rows)
+    if auth.current_user().role not in ("admin", "hr", "service"):
+        return plan_policy(run, request)  # an employee's general pay question ("when is salary paid?") is policy
     out = run.call("payroll_summary", month=month)
     if "error" in out:
         return out["error"]
@@ -534,6 +542,15 @@ def plan_projects(run, request):
                            percent=float(pct.group(1)) if pct else 100)
             return out.get("error") or (f"{out['name']} is on {out['project']} at {out['percent']:g}% from "
                                         f"{out['start_date']}; now {out['now_allocated_pct']:g}% booked in total.")
+    log = re.search(r"\blog(?:ged)?\s+(\d+(?:\.\d+)?)\s*h(?:ou)?rs?\s+(?:on|to|for)\s+(?:the\s+)?(.+?)(?:\s+project)?"
+                    r"(?:\s+(today|yesterday|on\s+\d{4}-\d{2}-\d{2}))?[.!]?$", request, re.I)
+    if log:
+        when = (log.group(3) or "today").lower()
+        day = (config.today() - timedelta(days=1)).isoformat() if when == "yesterday" else \
+            config.today().isoformat() if when == "today" else when.split()[-1]
+        out = run.call("log_project_hours", project=log.group(2).strip(), day=day, hours=float(log.group(1)))
+        return out.get("error") or (f"Logged {out['hours']:g} hours on {log.group(2).strip()} for {out['day']} "
+                                    f"({out['day_total']:g} hours that day).")
     if re.search(r"timesheet|hours", t):
         out = run.call("project_timesheet", days=7)
         if "error" in out:

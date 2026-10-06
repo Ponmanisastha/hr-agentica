@@ -71,9 +71,10 @@ def build():
     found = set()
     for sec in policies.sections():
         title = sec["meta"]["section"]
+        text = re.sub(r"\s+", " ", sec["text"])  # PDF and Word text breaks lines mid-sentence
         for subj, pred, pattern, word in RULE_PATTERNS:
             if (subj, pred) not in found and word in title.lower():
-                m = re.search(pattern, sec["text"])
+                m = re.search(pattern, text)
                 if m:
                     found.add((subj, pred))
                     add(subj, pred, m.group(1).replace(",", ""), f"{sec['meta']['source']}, section {title}")
@@ -91,6 +92,25 @@ def source(subject, predicate):
     """Where a rule came from, for citations ("Policy handbook, section 1. Annual leave")."""
     row = db.q1("SELECT source FROM kg_triples WHERE subject=? AND predicate=?", (subject, predicate))
     return row["source"] if row else "the default rules (not found in your policy documents)"
+
+
+LABELS = {"days_per_year": "days a year", "notice_days": "days' notice", "auto_approve_max_days": "auto-approved up to (days)",
+          "carry_forward_days": "carry forward (days)", "credit_per_month": "credited a month (days)",
+          "certificate_after_days": "certificate after (days)", "max_consecutive_days": "most consecutive days",
+          "weeks": "weeks", "working_days": "working days", "days_L3_and_above": "days, L3 and above",
+          "days_other_levels": "days, other levels", "max_days_per_week": "days a week",
+          "cap_rupees_per_month": "rupees a month"}
+
+
+def rules():
+    """Every rule the leave engine and the agents use, its value, and where it was read from."""
+    out = []
+    for subj, pred, _, _ in RULE_PATTERNS:
+        row = db.q1("SELECT object, source FROM kg_triples WHERE subject=? AND predicate=?", (subj, pred))
+        value = row["object"] if row else DEFAULT_RULES.get((subj, pred))
+        out.append({"rule": f"{subj.capitalize()}: {LABELS.get(pred, pred)}", "subject": subj, "predicate": pred,
+                    "value": value, "source": row["source"] if row else None})
+    return out
 
 
 def neighbours(entity):

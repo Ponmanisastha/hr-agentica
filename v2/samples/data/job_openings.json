@@ -1,0 +1,64 @@
+[
+  {
+    "id": "JOB-101",
+    "title": "Backend Engineer",
+    "location": "Chennai (hybrid)",
+    "min_years": 3,
+    "must_have": [
+      "python",
+      "sql",
+      "rest api"
+    ],
+    "nice_to_have": [
+      "aws",
+      "docker",
+      "kubernetes",
+      "postgresql"
+    ],
+    "shortlist_size": 3
+  },
+  {
+    "id": "JOB-102",
+    "title": "HR Executive",
+    "location": "Chennai (office)",
+    "min_years": 2,
+    "must_have": [
+      "recruitment",
+      "hrms",
+      "labour law"
+    ],
+    "nice_to_have": [
+      "excel",
+      "payroll",
+      "communication"
+    ],
+    "shortlist_size": 2,
+    "rounds": [
+      "HR screen",
+      "L1",
+      "Final"
+    ]
+  },
+  {
+    "id": "JOB-103",
+    "title": "Data Analyst",
+    "location": "Chennai (hybrid)",
+    "min_years": 2,
+    "must_have": [
+      "sql",
+      "python",
+      "excel"
+    ],
+    "nice_to_have": [
+      "power bi",
+      "tableau",
+      "statistics"
+    ],
+    "shortlist_size": 2,
+    "rounds": [
+      "L1",
+      "Case study",
+      "Final"
+    ]
+  }
+]
