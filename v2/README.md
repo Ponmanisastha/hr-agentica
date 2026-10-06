@@ -39,7 +39,7 @@ python app.py budget                                # spend vs budget per agent
 python app.py budget set screening 20 --on-exceed block
 ```
 
-Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
+Web console pages depend on your role: Dashboard (HR insights), Assistant (with 👍 and 👎 feedback), Hiring, Projects, Payroll, My pay (for employees), Approvals, Tickets (approve or reject fixes), AI budget, and Outbox (email drafts). The search bar at the top (Ctrl K) sends any question to the agents from every page. Light and dark themes follow your system, or pick one with the Theme button.
 
 ## Hiring pipeline
 
@@ -83,6 +83,24 @@ python app.py ask "How is hiring going?"
 
 A snapshot is saved to `var/reports/` every morning (`insights_report` trigger); on Mondays it is also drafted as an
 email to HR (`HRAI_HR_EMAIL`).
+
+## Projects and staffing
+
+Projects hold who is on them (a percentage of their time between two dates), tasks and milestones, and timesheets.
+Nobody can be booked past 100%, so capacity, the bench and utilisation all come from the same numbers, with approved
+leave taken off.
+
+```bash
+python app.py projects                 # board: team size, FTE, open and overdue tasks, hours, days left
+python app.py projects capacity        # who is booked how much, and who is free
+python app.py projects risks           # overdue work, unstaffed projects, skill gaps, people rolling off
+python app.py ask "Who is free next month?"
+python app.py ask "Put Deepa on the Customer portal revamp at 40%"
+python app.py ask "What is slipping?"
+```
+
+A project lists the skills it needs; when nobody on it has one, the Projects page says so and names people who are
+free and do. Managers get the Projects page; employees see their own projects and log their own hours.
 
 ## Salary and payroll
 
@@ -133,7 +151,7 @@ python app.py a2a send http://localhost:8000/a2a/policy "How long is paternity l
 ## Tests
 
 ```bash
-python -m unittest discover -s tests -t .     # 57 tests, offline, about 16 seconds
+python -m unittest discover -s tests -t .     # 68 tests, offline, about 18 seconds
 ```
 
 ## Layout
@@ -148,6 +166,7 @@ python -m unittest discover -s tests -t .     # 57 tests, offline, about 16 seco
 | `hrai/hiring.py` | Hiring pipeline: inbox, screening, rounds, offers, joining, follow-ups |
 | `hrai/insights.py` | HR analytics, the needs-attention list, daily report, CSV export |
 | `hrai/payroll.py` | Salary structures, Indian payroll, payslips, payroll runs |
+| `hrai/projects.py` | Projects, allocations, capacity and the bench, tasks, timesheets |
 | `hrai/auth.py`, `hrai/db.py` | Logins and roles; SQLite schema |
 | `hrai/hooks.py`, `hooks.d/` | Hooks |
 | `hrai/triggers.py`, `hrai/automations.py` | Triggers |

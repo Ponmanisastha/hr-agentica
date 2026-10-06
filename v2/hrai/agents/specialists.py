@@ -158,7 +158,21 @@ PAYROLL = Spec(
     examples=["What is the breakup for a 12 lakh CTC?", "Run payroll for 2026-10", "Which tax regime is better for me?",
               "Give Deepa a 10% hike from next month"])
 
-SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT, INSIGHTS, PAYROLL)}
+PROJECTS = Spec(
+    "projects", "Project and staffing agent",
+    "Projects, who is allocated to them, capacity and the bench, tasks and milestones, timesheets and project risks.",
+    "fast",
+    ["project_board", "project_details", "create_project", "update_project", "allocate_person", "release_person",
+     "team_capacity", "project_risks", "add_project_task", "update_project_task", "project_tasks", "my_projects",
+     "log_project_hours", "project_timesheet", "draft_email", "load_skill", "report_issue"],
+    "You are the project and staffing agent. Use the tools for every number; never guess who is free. Allocations are "
+    "a percentage of someone's time, and nobody goes past 100%. When asked to staff something, suggest people the "
+    "capacity tool says are free and say what they are already on. Keep answers short and name people and projects "
+    "plainly. Follow the project-staffing skill.",
+    examples=["Who is free next month?", "Put Deepa on the portal project at 40%", "What is slipping?",
+              "Show the portal project"])
+
+SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT, INSIGHTS, PAYROLL, PROJECTS)}
 
 
 # ---------------------------------------------------------------- rules-only plans (no model)
@@ -308,7 +322,7 @@ def plan_insights(run, request):
         items = run.call("needs_attention")["items"]
         return ("Needs attention:\n" + "\n".join(f"{i + 1}. {a['text']}" for i, a in enumerate(items))) if items \
             else "Nothing needs attention right now."
-    for section, pattern in (("payroll", r"payroll|salary cost|wage bill"), ("ai", r"\bai\b|budget|spend|token"), ("leave", r"leave"),
+    for section, pattern in (("payroll", r"payroll|salary cost|wage bill"), ("projects", r"project|utilisation|bench"), ("ai", r"\bai\b|budget|spend|token"), ("leave", r"leave"),
                              ("onboarding", r"onboarding"), ("workforce", r"headcount|department|workforce|joiners")):
         if re.search(pattern, t):
             data = run.call("hr_insights", section=section)
@@ -400,5 +414,78 @@ def _amount(match):
     return n * 100000 if n < 200 else n
 
 
+def plan_projects(run, request):
+    t = request.lower()
+    if re.search(r"\bfree\b|bench|capacity|availab|utilisation|utilization|who can", t):
+        out = run.call("team_capacity", free_only=bool(re.search(r"free|bench|availab|who can", t)))
+        u = out["utilisation"]
+        lines = [f"Average utilisation {u['average_pct']}% across {u['people']} people; {u['bench']} on the bench, "
+                 f"{u['over_allocated']} over-allocated."]
+        for c in out["people"][:10]:
+            on = ", ".join(f"{p['project']} {p['percent']:g}%" for p in c["projects"]) or "nothing"
+            lines.append(f"- {c['name']}: {c['allocated_pct']:g}% booked ({on}), {c['free_pct']:g}% free"
+                         + (f", {c['leave_days']:g} leave day(s)" if c["leave_days"] else ""))
+        return "\n".join(lines)
+    if re.search(r"risk|slip|late|overdue|attention|blocked", t):
+        risks = run.call("project_risks")["risks"]
+        return "\n".join(f"- {x['text']}" for x in risks) or "Nothing is slipping right now."
+    if re.search(r"\b(put|allocate|assign|staff)\b", t) and re.search(r"\bon\b|\bto\b", t):
+        pct = re.search(r"(\d{1,3})\s*%", t)
+        who = re.search(r"(?:put|allocate|assign|staff)\s+(E\d+|[A-Za-z][\w.]*(?:\s+[A-Z][\w.]*)??)\s+(?:on|to)\b",
+                        request, re.I)
+        what = re.search(r"\b(?:on|to)\s+(?:the\s+)?([\w \-]+?)(?:\s+project)?(?:\s+at\b|\s+for\b|[.,]|$)", request, re.I)
+        if who and what:
+            out = run.call("allocate_person", employee=who.group(1).strip(), project=what.group(1).strip(),
+                           percent=float(pct.group(1)) if pct else 100)
+            return out.get("error") or (f"{out['name']} is on {out['project']} at {out['percent']:g}% from "
+                                        f"{out['start_date']}; now {out['now_allocated_pct']:g}% booked in total.")
+    if re.search(r"timesheet|hours", t):
+        out = run.call("project_timesheet", days=7)
+        if "error" in out:
+            return out["error"]
+        return (f"{out['total_hours']:g} hours logged since {out['from']}: "
+                + ", ".join(f"{b['project']} {b['hours']:g}h" for b in out["by_project"])) if out["entries"] \
+            else "No hours logged in the last week."
+    if re.search(r"\bmy\b", t):
+        out = run.call("my_projects")
+        if "error" in out:
+            return out["error"]
+        return (f"{out['name']} is {out['allocated_pct']:g}% allocated: "
+                + "; ".join(f"{c['project']} {c['percent']:g}% as {c['role'] or 'team member'}" for c in out["current"])) \
+            if out["current"] else f"{out['name']} is not on any project right now."
+    if re.search(r"task|milestone", t):
+        rows = run.call("project_tasks")["tasks"]
+        return "\n".join(f"- [{r['project']}] {r['title']} ({r['status']}"
+                         + (f", due {r['due']}{' OVERDUE' if r['overdue'] else ''}" if r["due"] else "") + ")"
+                         for r in rows[:15]) or "No open tasks."
+    name = re.search(r"(?:show|about|status of|how is)\s+(?:the\s+)?([\w \-]+?)(?:\s+project)?[?.]?$", request, re.I)
+    if name:
+        out = run.call("project_details", project=name.group(1).strip())
+        if "error" not in out:
+            p, team = out["project"], [t for t in out["team"] if t["current"]]
+            open_tasks = [t for t in out["tasks"] if t["status"] != "done"]
+            return (f"{p['name']} ({p['id']}): {p['status']}, {p['health'].replace('_', ' ')}, manager "
+                    f"{p['manager'] or 'none'}, ends {p['end_date'] or 'open'}. Team: "
+                    + (", ".join(f"{m['name']} {m['percent']:g}%" for m in team) or "nobody")
+                    + f". {len(open_tasks)} open task(s)."
+                    + (f" Missing skills: {', '.join(out['staffing']['gaps'])}." if out["staffing"]["gaps"] else ""))
+    return run.call("project_board") and _project_summary(run)
+
+
+def _project_summary(run):
+    rows = run.call("project_board")["projects"]
+    if not rows:
+        return "No projects yet."
+    cap = run.call("team_capacity")["utilisation"]
+    lines = [f"{len(rows)} project(s):"]
+    for p in rows[:10]:
+        lines.append(f"- {p['name']} ({p['status']}): {p['team_size']} people ({p['fte']} FTE), {p['open_tasks']} open "
+                     f"task(s)" + (f", {p['overdue_tasks']} overdue" if p["overdue_tasks"] else "")
+                     + (f", ends in {p['days_left']} day(s)" if p["days_left"] is not None else ""))
+    lines.append(f"Average utilisation {cap['average_pct']}%, {cap['bench']} on the bench.")
+    return "\n".join(lines)
+
+
 PLANS = {"policy": plan_policy, "leave": plan_leave, "onboarding": plan_onboarding, "screening": plan_screening,
-         "recruitment": plan_recruitment, "insights": plan_insights, "payroll": plan_payroll}
+         "recruitment": plan_recruitment, "insights": plan_insights, "payroll": plan_payroll,
+         "projects": plan_projects}

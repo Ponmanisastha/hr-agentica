@@ -96,6 +96,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._get_hiring(path)
         if path.startswith("/api/payroll"):
             return self._get_payroll(path)
+        if path.startswith("/api/projects"):
+            return self._get_projects(path)
         if path in ("/api/insights", "/api/insights/candidates.csv"):
             from urllib.parse import parse_qs, urlparse
             from . import insights
@@ -174,6 +176,55 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             return self._ok_or_error(T.run("my_payslip", month=month, employee=m.group(1)))
         return self._send(404, {"error": "not found"})
+
+    def _get_projects(self, path):
+        from urllib.parse import parse_qs, urlparse
+        qs = parse_qs(urlparse(self.path).query)
+        if path == "/api/projects":
+            out = T.run("project_board", status=qs.get("status", [""])[0])
+            if "error" in out:
+                return self._send(403, out)
+            return self._send(200, {**out, "capacity": T.run("team_capacity", weeks=int(qs.get("weeks", ["4"])[0])),
+                                    "risks": T.run("project_risks")["risks"],
+                                    "tasks": T.run("project_tasks")["tasks"],
+                                    "timesheet": T.run("project_timesheet", days=7)})
+        if path == "/api/projects/mine":
+            return self._ok_or_error(T.run("my_projects"))
+        m = re.fullmatch(r"/api/projects/([\w-]+)", path)
+        if m:
+            return self._ok_or_error(T.run("project_details", project=m.group(1)))
+        return self._send(404, {"error": "not found"})
+
+    def _post_projects(self, path, body):
+        calls = {
+            "/api/projects/create": lambda: T.run("create_project", project_name=body.get("name", ""), client=body.get("client", ""),
+                                                  manager=body.get("manager", ""), start_date=body.get("start_date", ""),
+                                                  end_date=body.get("end_date", ""),
+                                                  skills=[s.strip() for s in str(body.get("skills", "")).split(",") if s.strip()],
+                                                  notes=body.get("notes", "")),
+            "/api/projects/update": lambda: T.run("update_project", project=body.get("project", ""),
+                                                  status=body.get("status", ""), health=body.get("health", ""),
+                                                  manager=body.get("manager", ""), end_date=body.get("end_date", ""),
+                                                  notes=body.get("notes", "")),
+            "/api/projects/allocate": lambda: T.run("allocate_person", employee=body.get("employee", ""),
+                                                    project=body.get("project", ""), percent=float(body.get("percent") or 100),
+                                                    role=body.get("role", ""), start_date=body.get("start_date", ""),
+                                                    end_date=body.get("end_date", "")),
+            "/api/projects/release": lambda: T.run("release_person", allocation_id=int(body.get("allocation_id") or 0),
+                                                   end_date=body.get("end_date", ""), note=body.get("note", "")),
+            "/api/projects/task": lambda: T.run("add_project_task", project=body.get("project", ""),
+                                                title=body.get("title", ""), owner=body.get("owner", ""),
+                                                due=body.get("due", ""), kind=body.get("kind", "task")),
+            "/api/projects/task/update": lambda: T.run("update_project_task", task_id=int(body.get("task_id") or 0),
+                                                       status=body.get("status", ""), owner=body.get("owner", ""),
+                                                       due=body.get("due", ""), note=body.get("note", "")),
+            "/api/projects/hours": lambda: T.run("log_project_hours", project=body.get("project", ""),
+                                                 day=body.get("day", ""), hours=float(body.get("hours") or 0),
+                                                 employee=body.get("employee", ""), note=body.get("note", "")),
+        }
+        if path not in calls:
+            return self._send(404, {"error": "not found"})
+        return self._ok_or_error(calls[path]())
 
     def _post_payroll(self, path, body):
         month = body.get("month", "")
@@ -293,6 +344,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._post_hiring(path, body)
         if path.startswith("/api/payroll/"):
             return self._post_payroll(path, body)
+        if path.startswith("/api/projects/"):
+            return self._post_projects(path, body)
         if path == "/api/logout":
             auth.logout(self._token())
             return self._send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Max-Age=0; Path=/"})

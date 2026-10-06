@@ -268,6 +268,7 @@
             <div class="card tile"><div class="label">Headcount</div><div id="kHead" class="value">–</div><div id="kPayNote" class="note"></div></div>
             <div class="card tile"><div class="label">Leave requests pending</div><div id="kLeave" class="value">–</div><div id="kLeaveNote" class="note"></div></div>
             <div class="card tile"><div class="label">Onboarding tasks done</div><div id="kOnb" class="value">–</div><div id="kOnbMeter" class="meter" style="margin-top:10px"><span></span></div><div id="kOnbNote" class="note"></div></div>
+            <div class="card tile"><div class="label">Projects</div><div id="kProj" class="value">–</div><div id="kProjNote" class="note"></div></div>
             <div class="card tile"><div class="label">Open tickets</div><div id="kTickets" class="value">–</div><div id="kTicketsNote" class="note"></div></div>
           </div>
           <div class="grid g3" style="margin-top:16px">
@@ -307,6 +308,33 @@
           <div id="hFollow" class="card"></div>
           <div id="hDetail"></div>
         </div>
+      </section>
+
+      <!-- projects -->
+      <section id="projects" class="hidden">
+        <div class="filters">
+          <select id="jStatus" aria-label="Project status">
+            <option value="">All projects</option><option value="active">Active</option><option value="planned">Planned</option>
+            <option value="on_hold">On hold</option><option value="done">Done</option>
+          </select>
+          <button id="jNew" class="btn primary">New project</button>
+          <button id="jRefresh" class="btn">Refresh</button>
+          <span id="jUtil" class="muted asof"></span>
+        </div>
+        <div class="tiles" style="margin-top:0">
+          <div class="card tile"><div class="label">Active projects</div><div id="jActive" class="value">–</div><div id="jActiveNote" class="note"></div></div>
+          <div class="card tile"><div class="label">Average utilisation</div><div id="jUtilPct" class="value">–</div><div id="jUtilMeter" class="meter" style="margin-top:10px"><span></span></div><div id="jUtilNote" class="note"></div></div>
+          <div class="card tile"><div class="label">Open tasks</div><div id="jTasks" class="value">–</div><div id="jTasksNote" class="note"></div></div>
+          <div class="card tile"><div class="label">Hours logged this week</div><div id="jHours" class="value">–</div><div class="note">from timesheets</div></div>
+        </div>
+        <div class="grid g2" style="margin-top:16px;align-items:start">
+          <div class="card"><div class="card-head"><div><h3>Projects</h3><div class="sub">Click a project to see its team and tasks</div></div></div><div id="jList" class="table-wrap"></div></div>
+          <div>
+            <div class="card"><div class="card-head"><div><h3>Needs attention</h3><div class="sub">Overdue work, staffing gaps and people rolling off</div></div></div><ul id="jRisks" class="attn"></ul></div>
+            <div class="card"><div class="card-head"><div><h3>Who is free</h3><div class="sub">Next four weeks, approved leave taken off</div></div><button class="btn ghost" data-table="cCapacity">Table</button></div><div id="cCapacity"></div></div>
+          </div>
+        </div>
+        <div id="jDetail"></div>
       </section>
 
       <!-- payroll -->
@@ -387,17 +415,19 @@ const ICONS = {
   outbox:'<path d="M4 4h16v16H4z"/><path d="m4 6 8 7 8-7"/>',
   payroll:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
   mypay:'<path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+  projects:'<path d="M3 7h7l2 2h9v10a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M8 13h8"/>',
 };
 const HR = r => ['admin','hr'].includes(r);
-const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['hiring','Hiring',HR],['payroll','Payroll',HR],
-              ['mypay','My pay',r=>!HR(r)],['approvals','Approvals',r=>['admin','hr','manager'].includes(r)],
+const MGR = r => ['admin','hr','manager'].includes(r);
+const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['hiring','Hiring',HR],['projects','Projects',MGR],['payroll','Payroll',HR],
+              ['mypay','My pay',r=>!HR(r)],['approvals','Approvals',MGR],
               ['tickets','Tickets',HR],['budget','AI budget',HR],['outbox','Outbox',HR]];
 function show(tab) {
   TABS.forEach(([id]) => $(id).classList.toggle('hidden', id !== tab));
   [...$('nav').children].forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'); });
   $('pageTitle').textContent = (TABS.find(t => t[0] === tab) || [])[1] || '';
   store.set('hr-tab', tab);
-  ({dashboard:loadDashboard, hiring:loadHiring, payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
+  ({dashboard:loadDashboard, hiring:loadHiring, projects:loadProjects, payroll:loadPayroll, mypay:loadMyPay, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
 }
 function start(user) {
   me = user; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -550,10 +580,12 @@ async function loadDashboard() {
   $('kToOffer').textContent = h.time_to_offer_days ?? '–'; $('kToAccept').textContent = h.time_to_accept_days ?? '–'; $('kToJoin').textContent = h.time_to_join_days ?? '–';
   $('kAccept').textContent = h.offer_acceptance_pct === null ? '–' : h.offer_acceptance_pct + '%';
   $('kHead').textContent = fmt(k.headcount);
+  $('kProjNote').textContent = k.active_projects ? `${k.active_projects} active project${k.active_projects === 1 ? '' : 's'} · utilisation ${k.utilisation_pct}% · ${k.bench} on the bench` : 'no active projects';
   $('kPayNote').textContent = k.payroll_status === 'not_started' ? `payroll for ${monthLabel(k.payroll_month)} not run yet`
     : `payroll ${monthLabel(k.payroll_month)}: ${inr(k.payroll_net)} ${PSTATUS[k.payroll_status] || k.payroll_status}`; $('kLeave').textContent = fmt(k.leave_pending); $('kLeaveNote').textContent = `${d.leave.upcoming_days_30} approved days in the next 30`;
   const ob = d.onboarding; $('kOnb').textContent = ob.pct_done === null ? '–' : ob.pct_done + '%'; $('kOnbMeter').firstElementChild.style.width = (ob.pct_done || 0) + '%';
   $('kOnbNote').textContent = ob.tasks ? `${ob.done} of ${ob.tasks} · ${ob.blocked} blocked · ${ob.overdue} overdue` : 'No onboarding tasks yet';
+  $('kProj').textContent = fmt(d.projects.open_tasks); $('kProj').previousElementSibling.textContent = 'Open project tasks';
   $('kTickets').textContent = fmt(k.open_tickets); $('kTicketsNote').textContent = d.operations.helpful_pct === null ? 'no answer feedback yet' : `${d.operations.helpful_pct}% of answers rated helpful`;
 
   const attn = $('dAttn'); attn.replaceChildren();
@@ -601,8 +633,9 @@ $('dJob').onchange = loadDashboard; $('dRefresh').onclick = loadDashboard;
 
 // ---------------------------------------------------------------- assistant
 function examples() {
-  const list = HR(me.role) ? ['What needs my attention today?', 'How is hiring going?', 'Read the new resumes in the inbox', 'Run payroll for this month', 'What is the breakup for a 12 lakh CTC?']
-    : ['How many casual leave days do we get?', 'Show my payslip', 'I need casual leave on 2026-10-08', 'Who approves my leave?'];
+  const list = HR(me.role) ? ['What needs my attention today?', 'How is hiring going?', 'Who is free next month?', 'What is slipping?', 'Run payroll for this month']
+    : MGR(me.role) ? ['Who is free next month?', 'What is slipping?', 'Show my projects', 'How many casual leave days do we get?']
+    : ['How many casual leave days do we get?', 'Show my projects', 'Show my payslip', 'I need casual leave on 2026-10-08'];
   $('examples').replaceChildren(...list.map(x => { const c = el('button', x, 'chip'); c.onclick = () => { $('q').value = x; $('send').click(); }; return c; }));
 }
 $('send').onclick = async () => {
@@ -627,6 +660,116 @@ $('send').onclick = async () => {
   $('answers').prepend(card); $('busy').textContent = ''; $('q').value = ''; $('send').disabled = false;
 };
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('send').click(); });
+
+// ---------------------------------------------------------------- projects
+let jData = null;
+async function loadProjects() {
+  let d; try { d = await api('/api/projects' + ($('jStatus').value ? `?status=${$('jStatus').value}` : '')); }
+  catch (e) { return $('jUtil').textContent = e.message; }
+  jData = d;
+  const u = d.capacity.utilisation;
+  $('jUtil').textContent = `${d.projects.length} project${d.projects.length === 1 ? '' : 's'}`;
+  $('jActive').textContent = fmt(d.projects.filter(p => p.status === 'active').length);
+  $('jActiveNote').textContent = `${d.projects.reduce((a, p) => a + p.fte, 0).toFixed(1)} FTE allocated`;
+  $('jUtilPct').textContent = u.average_pct + '%'; $('jUtilMeter').firstElementChild.style.width = Math.min(100, u.average_pct) + '%';
+  $('jUtilNote').textContent = `${u.bench} on the bench · ${u.over_allocated} over-allocated`;
+  const open = d.tasks.length, overdue = d.tasks.filter(t => t.overdue).length;
+  $('jTasks').textContent = fmt(open); $('jTasksNote').textContent = overdue ? `${overdue} overdue` : 'none overdue';
+  $('jHours').textContent = d.timesheet.total_hours + 'h';
+  const t = el('table'); const hr = el('tr'); ['Project','Team','Open tasks','Hours','Ends'].forEach((h, i) => hr.append(el('th', h, i ? 'num' : ''))); t.append(hr);
+  d.projects.forEach(p => { const tr = el('tr', undefined, 'click'); const c0 = el('td');
+    c0.append(el('div', p.name), el('div', `${p.id} · ${p.client || 'internal'} · ${p.status}`, 'muted'));
+    if (p.health !== 'on_track') c0.append(statusTag(p.health === 'off_track' ? 'critical' : 'warning', p.health.replace('_', ' ')));
+    const tasks = el('td', undefined, 'num'); tasks.append(el('span', String(p.open_tasks)));
+    if (p.overdue_tasks) tasks.append(statusTag('warning', `${p.overdue_tasks} overdue`));
+    tr.append(c0, el('td', `${p.team_size} (${p.fte} FTE)`, 'num'), tasks, el('td', p.hours_this_month + 'h', 'num'),
+              el('td', p.days_left === null ? 'open' : `${p.days_left}d`, 'num'));
+    tr.onclick = () => projectDetail(p.id); t.append(tr); });
+  $('jList').replaceChildren(d.projects.length ? t : el('div', 'No projects yet. Start one with New project.', 'empty'));
+  const risks = $('jRisks'); risks.replaceChildren();
+  if (!d.risks.length) { const li = el('li'); li.append(statusTag('good'), el('span', 'Nothing needs attention.', 'txt')); risks.append(li); }
+  const RISK_LABEL = {critical:'Urgent', warning:'Check', info:'Heads up'};
+  d.risks.forEach(x => { const li = el('li'); li.append(statusTag(x.severity, RISK_LABEL[x.severity]), el('span', x.text, 'txt'));
+    if (x.project_id) { const b = el('button', 'Open', 'btn ghost'); b.onclick = () => projectDetail(x.project_id); li.append(b); } risks.append(li); });
+  const cap = d.capacity.people.map(c => ({label:c.name, value:c.allocated_pct,
+    tip:`${c.name} · ${c.projects.map(p => p.project + ' ' + p.percent + '%').join(', ') || 'no project'}`}));
+  hbars('cCapacity', cap, {format:v => v + '%', empty:'Nobody is allocated yet.'});
+  setTable('cCapacity', ['Person','Booked','Free','Leave days'], d.capacity.people.map(c => [c.name, c.allocated_pct + '%', c.free_pct + '%', c.leave_days]));
+}
+$('jStatus').onchange = loadProjects; $('jRefresh').onclick = loadProjects;
+$('jNew').onclick = () => projectForm();
+function detailCard(title, sub) {
+  const box = el('div', undefined, 'card'); const head = el('div', undefined, 'card-head'); const hd = el('div');
+  hd.append(el('h3', title)); if (sub) hd.append(el('div', sub, 'sub'));
+  const close = el('button', 'Close', 'btn ghost'); close.onclick = () => $('jDetail').replaceChildren();
+  head.append(hd, close); box.append(head); return box;
+}
+function projectForm() {
+  const box = detailCard('New project');
+  const grid = el('div', undefined, 'grid2'); grid.style.marginTop = '12px';
+  const f = {name:inp('text','Customer portal revamp'), client:inp('text','Client or Internal'), manager:inp('text','Project manager'),
+             start_date:inp('date'), end_date:inp('date'), skills:inp('text','python, sql, react')};
+  const labels = {name:'Name', client:'Client', manager:'Manager', start_date:'Starts', end_date:'Ends', skills:'Skills needed (comma separated)'};
+  Object.entries(f).forEach(([k, i]) => grid.append(field(labels[k], i)));
+  const say = el('div', '', 'muted'); const go = el('button', 'Create project', 'btn primary');
+  go.onclick = async () => { try { const body = {}; Object.entries(f).forEach(([k, i]) => body[k] = i.value);
+      const p = await api('/api/projects/create', body); $('jDetail').replaceChildren(); await loadProjects(); projectDetail(p.id); }
+    catch (e) { say.textContent = e.message; say.className = 'err'; } };
+  grid.append(go); box.append(grid, say); $('jDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+async function projectDetail(id) {
+  let d; try { d = await api(`/api/projects/${id}`); } catch (e) { return $('jUtil').textContent = e.message; }
+  const p = d.project;
+  const box = detailCard(p.name, `${p.id} · ${p.client || 'internal'} · ${p.status} · manager ${p.manager || 'none'} · ${p.start_date} to ${p.end_date || 'open'}`);
+  const say = el('div', '', 'muted');
+  const run = async (path, body) => { try { await api(path, body); await loadProjects(); projectDetail(id); } catch (e) { say.textContent = e.message; say.className = 'err'; } };
+  const head = el('div', undefined, 'row'); head.style.margin = '4px 0 12px';
+  ['active','on_hold','done'].forEach(st => { if (st === p.status) return; const b = el('button', st === 'on_hold' ? 'Put on hold' : st === 'done' ? 'Mark done' : 'Reactivate', 'btn ghost');
+    b.onclick = () => run('/api/projects/update', {project:id, status:st}); head.append(b); });
+  ['on_track','at_risk','off_track'].forEach(h => { if (h === p.health) return; const b = el('button', h.replace('_', ' '), 'btn ghost');
+    b.onclick = () => run('/api/projects/update', {project:id, health:h}); head.append(b); });
+  box.append(head);
+  if (d.staffing.needed.length) { const sk = el('div', undefined, 'row'); sk.append(el('span', 'Skills needed:', 'muted'));
+    d.staffing.needed.forEach(x => { const gap = d.staffing.gaps.includes(x); const pill = el('span', undefined, 'pill');
+      if (gap) pill.append(statusTag('warning', 'nobody has')); pill.append(el('span', x)); sk.append(pill); });
+    box.append(sk);
+    if (d.staffing.suggestions.length) box.append(el('div', 'Free and have those skills: ' + d.staffing.suggestions.map(x => `${x.name} (${x.free_pct}% free)`).join(', '), 'muted'));
+  }
+  box.append(el('div', 'Team', 'section-title'));
+  const tt = el('table');
+  d.team.filter(m => m.current).forEach(m => { const tr = el('tr');
+    tr.append(el('td', m.name), el('td', m.role || 'team member', 'muted'), el('td', m.percent + '%', 'num'), el('td', m.end_date || 'open', 'num'));
+    const act = el('td'); const b = el('button', 'Release', 'btn ghost'); b.onclick = () => run('/api/projects/release', {allocation_id:m.id}); act.append(b); tr.append(act); tt.append(tr); });
+  const tw = el('div', undefined, 'table-wrap'); tw.append(tt);
+  box.append(d.team.some(m => m.current) ? tw : el('div', 'Nobody is allocated yet.', 'empty'));
+  const add = el('div', undefined, 'grid2'); add.style.marginTop = '10px';
+  const who = inp('text', 'Name or employee id'), pct = inp('number', '50'), role = inp('text', 'Role'), until = inp('date');
+  const ab = el('button', 'Allocate', 'btn primary');
+  ab.onclick = () => run('/api/projects/allocate', {project:id, employee:who.value, percent:pct.value || 100, role:role.value, end_date:until.value});
+  add.append(field('Person', who), field('Percent of time', pct), field('Role', role), field('Until', until), ab);
+  box.append(add);
+  box.append(el('div', 'Tasks and milestones', 'section-title'));
+  const tasks = el('table');
+  d.tasks.forEach(t => { const tr = el('tr'); const c0 = el('td'); c0.append(el('div', t.title), el('div', `${t.kind}${t.owner ? ' · ' + t.owner : ''}`, 'muted'));
+    const due = el('td', t.due || '–', 'num'); if (t.overdue) due.append(statusTag('warning', 'overdue'));
+    const st = el('select'); ['todo','in_progress','blocked','done'].forEach(x => { const o = el('option', x.replace('_', ' ')); o.value = x; st.append(o); });
+    st.value = t.status; st.onchange = () => run('/api/projects/task/update', {task_id:t.id, status:st.value});
+    const sc = el('td'); sc.append(st); tr.append(c0, due, sc); tasks.append(tr); });
+  const taskWrap = el('div', undefined, 'table-wrap'); taskWrap.append(tasks);
+  box.append(d.tasks.length ? taskWrap : el('div', 'No tasks yet.', 'empty'));
+  const nt = el('div', undefined, 'grid2'); nt.style.marginTop = '10px';
+  const title = inp('text', 'What needs doing'), owner = inp('text', 'Owner'), tdue = inp('date');
+  const kind = el('select'); ['task','milestone'].forEach(k => { const o = el('option', k); o.value = k; kind.append(o); });
+  const tb = el('button', 'Add', 'btn');
+  tb.onclick = () => run('/api/projects/task', {project:id, title:title.value, owner:owner.value, due:tdue.value, kind:kind.value});
+  nt.append(field('New task', title), field('Owner', owner), field('Due', tdue), field('Kind', kind), tb);
+  box.append(nt, say);
+  box.append(el('div', 'History', 'section-title'));
+  const ul = el('ul', undefined, 'timeline');
+  d.events.forEach(e => { const li = el('li'); li.append(el('div', `${e.event.replace(/_/g, ' ')}${e.detail ? ': ' + e.detail : ''}`), el('div', `${e.ts.replace('T', ' ')} · ${e.actor}`, 'muted')); ul.append(li); });
+  box.append(ul);
+  $('jDetail').replaceChildren(box); box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
 
 // ---------------------------------------------------------------- payroll
 const inr = n => n === null || n === undefined ? '–' : '₹' + Number(n).toLocaleString('en-IN');

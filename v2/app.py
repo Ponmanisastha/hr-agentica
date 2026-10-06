@@ -11,6 +11,7 @@
   python app.py tickets list | show ID | work [ID] | approve ID | reject ID [--note TEXT] | sync
   python app.py budget [show] | budget set AGENT USD [--on-exceed downgrade|block]
   python app.py hiring ingest [--job JOB-101] | board | followups | rounds JOB-101 L1 L2 L3 HR Final | sample
+  python app.py projects [board] | capacity | risks | tasks         projects, staffing and capacity
   python app.py payroll run|show|submit|paid REF|slip E101 [--month 2026-10]     salary and payroll
   python app.py insights [--job JOB-101] | attention | report | csv     HR analytics; csv prints the pipeline
   python app.py index                      rebuild vectors and the knowledge graph
@@ -97,6 +98,10 @@ def demo():
               f"Schedule Divya Krishnan for L1 on {nxt(2)} at 11:00",
               f"Divya cleared L1 with rating 4, schedule the next round on {nxt(4)} at 15:00",
               "What is the hiring pipeline status?"]:
+        print_result(r, G.handle(r, user=user, channel="cli"))
+    print("=" * 78)
+    print("PROJECTS: who is on what, who is free, and what is slipping")
+    for r in ["Show the project board", "Who is free next month?", "What is slipping?"]:
         print_result(r, G.handle(r, user=user, channel="cli"))
     print("=" * 78)
     print("PAYROLL: salary breakup, a draft run, and the approval it waits on")
@@ -244,6 +249,26 @@ def main(argv):
                 print(hiring.set_rounds(args[1], args[2:]))
             else:
                 print(hiring.summary(a.job or None))
+        finally:
+            auth._current.reset(token)
+    elif cmd == "projects":
+        from hrai import projects
+        sub = args[0] if args else "board"
+        token = auth.set_current_user(cli_user())
+        try:
+            if sub == "capacity":
+                for c in projects.capacity():
+                    on = ", ".join(f"{p['project']} {p['percent']:g}%" for p in c["projects"]) or "free"
+                    print(f"{c['id']:6} {c['name']:22} {c['allocated_pct']:>5.0f}%  {on}")
+            elif sub == "risks":
+                for x in projects.risks():
+                    print(f"[{x['severity']}] {x['text']}")
+            elif sub == "tasks":
+                for t in projects.tasks():
+                    print(f"#{t['id']:<4} {t['project']:24} {t['title']:34} {t['status']:12} {t['due'] or '':10}"
+                          + (" OVERDUE" if t["overdue"] else ""))
+            else:
+                print(projects.summary())
         finally:
             auth._current.reset(token)
     elif cmd == "payroll":
