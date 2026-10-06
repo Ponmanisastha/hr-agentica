@@ -5,82 +5,323 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HR Agent Console</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#667085; --line:#e3e6ec; --accent:#2f5bd3; --ok:#1b7f4c; --warn:#b54708; --bad:#b42318; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#14171d; --card:#1c2029; --ink:#e7e9ee; --muted:#9aa3b2; --line:#2c323d; --accent:#7ea2ff; --ok:#4cc38a; --warn:#f2a65a; --bad:#f97066; } }
-  * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
-  header { display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--card); flex-wrap:wrap; }
-  header h1 { font-size:17px; margin:0 auto 0 0; }
-  nav button, .btn { border:1px solid var(--line); background:var(--card); color:var(--ink); padding:6px 12px; border-radius:8px; cursor:pointer; font:inherit; }
-  nav button.on, .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-  main { max-width:980px; margin:0 auto; padding:16px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
-  input, textarea, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
-  textarea { min-height:70px; }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  :root {
+    color-scheme: light;
+    --page:#f9f9f7; --surface:#fcfcfb; --raised:#ffffff; --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,0.10); --hover:rgba(11,11,11,0.04);
+    --accent:#2a78d6; --accent-ink:#ffffff; --accent-wash:rgba(42,120,214,0.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+    --good:#0ca30c; --good-ink:#006300; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    --shadow:0 1px 2px rgba(11,11,11,0.04), 0 4px 16px rgba(11,11,11,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:#0d0d0d; --surface:#1a1a19; --raised:#212120; --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,0.10); --hover:rgba(255,255,255,0.05);
+      --accent:#3987e5; --accent-ink:#ffffff; --accent-wash:rgba(57,135,229,0.16);
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --good-ink:#0ca30c; --shadow:none;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:#0d0d0d; --surface:#1a1a19; --raised:#212120; --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,0.10); --hover:rgba(255,255,255,0.05);
+    --accent:#3987e5; --accent-ink:#ffffff; --accent-wash:rgba(57,135,229,0.16);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --good-ink:#0ca30c; --shadow:none;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  body { font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--page); color:var(--ink); }
+  button, input, select, textarea { font:inherit; color:inherit; }
+  .hidden { display:none !important; }
   .muted { color:var(--muted); font-size:13px; }
-  pre { white-space:pre-wrap; word-break:break-word; background:var(--bg); padding:10px; border-radius:8px; margin:8px 0 0; max-height:420px; overflow:auto; }
-  table { width:100%; border-collapse:collapse; font-size:14px; }
-  td, th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
-  .pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
-  .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; min-width:80px; }
-  .bar span { display:block; height:100%; background:var(--accent); }
-  .hidden { display:none; }
-  main.wide { max-width:1400px; }
-  .board { display:flex; gap:10px; overflow-x:auto; padding-bottom:8px; }
-  .col { min-width:190px; flex:1; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px; }
-  .col h4 { margin:2px 4px 8px; font-size:13px; display:flex; justify-content:space-between; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
-  .cand { border:1px solid var(--line); border-radius:10px; padding:8px; margin-bottom:6px; cursor:pointer; background:var(--bg); }
-  .cand:hover { border-color:var(--accent); }
-  .cand b { display:block; font-size:14px; }
-  .drop { border:2px dashed var(--line); border-radius:12px; padding:14px; text-align:center; color:var(--muted); }
-  .drop.over { border-color:var(--accent); color:var(--accent); }
-  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px; }
-  .ok { color:var(--ok); }
-  .err { color:var(--bad); }
+  .ink2 { color:var(--ink-2); }
+  .err { color:var(--critical); }
+  .ok { color:var(--good-ink); }
+
+  /* layout */
+  .app { display:grid; grid-template-columns:232px 1fr; min-height:100vh; }
+  .side { background:var(--surface); border-right:1px solid var(--ring); padding:18px 12px; display:flex; flex-direction:column; gap:4px; position:sticky; top:0; height:100vh; }
+  .brand { display:flex; align-items:center; gap:10px; padding:4px 10px 18px; font-weight:600; font-size:15px; }
+  .logo { width:28px; height:28px; border-radius:8px; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center; font-size:13px; font-weight:700; }
+  .navbtn { display:flex; align-items:center; gap:10px; width:100%; text-align:left; border:0; background:transparent; padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--ink-2); }
+  .navbtn:hover { background:var(--hover); color:var(--ink); }
+  .navbtn.on { background:var(--accent-wash); color:var(--ink); font-weight:600; }
+  .navbtn svg { width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .navbtn .count { margin-left:auto; font-size:12px; color:var(--ink-2); background:var(--hover); border-radius:99px; padding:0 7px; }
+  .side .foot { margin-top:auto; border-top:1px solid var(--ring); padding:12px 10px 0; display:flex; flex-direction:column; gap:8px; }
+  .content { min-width:0; display:flex; flex-direction:column; }
+  .top { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:16px; padding:14px 28px; background:color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--ring); }
+  .top h1 { font-size:18px; margin:0; font-weight:600; white-space:nowrap; }
+  .cmd { margin-left:auto; display:flex; align-items:center; gap:8px; background:var(--raised); border:1px solid var(--ring); border-radius:10px; padding:6px 10px; width:min(460px, 100%); box-shadow:var(--shadow); }
+  .cmd:focus-within { outline:2px solid var(--accent); outline-offset:1px; }
+  .cmd input, .cmd input:focus { border:0; outline:0; background:transparent; flex:1; min-width:0; padding:2px 0; }
+  .cmd kbd { font-size:11px; color:var(--muted); border:1px solid var(--ring); border-radius:4px; padding:0 5px; }
+  main { padding:24px 28px 48px; max-width:1320px; width:100%; }
+
+  /* surfaces and controls */
+  .card { background:var(--surface); border:1px solid var(--ring); border-radius:14px; padding:18px; box-shadow:var(--shadow); min-width:0; }
+  section > .card + .card, section > .card + div > .card:first-child { margin-top:16px; }
+  a.btn { text-decoration:none; color:inherit; display:inline-block; }
+  .card h3 { margin:0; font-size:15px; font-weight:600; }
+  .card .sub { color:var(--ink-2); font-size:13px; margin:2px 0 14px; }
+  .card-head { display:flex; align-items:flex-start; gap:8px; }
+  .card-head > div { flex:1; min-width:0; }
+  .btn { border:1px solid var(--ring); background:var(--raised); padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; }
+  .btn:hover { background:var(--hover); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .btn.primary:hover { filter:brightness(1.08); }
+  .btn.ghost { border-color:transparent; background:transparent; color:var(--ink-2); padding:4px 8px; font-size:13px; }
+  .btn.ghost:hover { background:var(--hover); color:var(--ink); }
+  input, textarea, select { width:100%; padding:8px 10px; border:1px solid var(--ring); border-radius:8px; background:var(--raised); }
+  input:focus, textarea:focus, select:focus, .btn:focus-visible, .navbtn:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  textarea { min-height:84px; resize:vertical; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .grid { display:grid; gap:16px; }
+  .g2 { grid-template-columns:repeat(2, minmax(0,1fr)); }
+  .g3 { grid-template-columns:repeat(3, minmax(0,1fr)); }
+  .section-title { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:28px 0 10px; }
+  pre { white-space:pre-wrap; word-break:break-word; background:var(--page); border:1px solid var(--ring); padding:12px; border-radius:10px; margin:10px 0 0; max-height:420px; overflow:auto; font:13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td, th { text-align:left; padding:8px 10px; border-bottom:1px solid var(--grid); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:var(--hover); }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:1px 9px; border-radius:99px; font-size:12px; border:1px solid var(--ring); color:var(--ink-2); white-space:nowrap; }
+  .dot { width:8px; height:8px; border-radius:50%; display:inline-block; flex:none; }
+  .table-wrap { overflow-x:auto; }
+
+  /* login */
+  .login { min-height:100vh; display:grid; place-items:center; padding:16px; }
+  .login .card { width:min(380px,100%); padding:28px; }
+
+  /* dashboard */
+  .filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+  .filters select { width:auto; min-width:200px; }
+  .filters .asof { margin-left:auto; }
+  .kpis { display:grid; grid-template-columns:minmax(220px,1.3fr) repeat(4, minmax(0,1fr)); gap:16px; }
+  .hero { display:flex; flex-direction:column; justify-content:space-between; }
+  .hero .value { font-size:56px; font-weight:600; line-height:1; letter-spacing:-.02em; margin:12px 0 6px; }
+  .tile .label, .hero .label { color:var(--ink-2); font-size:13px; }
+  .tile .value { font-size:28px; font-weight:600; line-height:1.1; margin-top:6px; }
+  .tile .note { color:var(--muted); font-size:12px; margin-top:4px; }
+  .tiles { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:16px; margin-top:16px; }
+  .attn { list-style:none; margin:0; padding:0; }
+  .attn li { display:flex; gap:10px; align-items:center; padding:10px 4px; border-bottom:1px solid var(--grid); }
+  .attn li:last-child { border-bottom:0; }
+  .attn .txt { flex:1; min-width:0; }
+  .status { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; white-space:nowrap; color:var(--ink-2); }
+  .status svg { width:14px; height:14px; flex:none; }
+  .empty { color:var(--muted); padding:18px 0; text-align:center; }
+
+  /* charts (HTML marks; specs: <=24px bars, 4px rounded data end, 2px gaps, hairline axes) */
+  .chart { position:relative; transition:opacity .2s; }
+  .chart.loading { opacity:.5; }
+  .hbar { display:grid; grid-template-columns:minmax(80px, max-content) 1fr; gap:6px 12px; align-items:center; }
+  .hbar .lab { color:var(--ink-2); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; }
+  .hbar .track { position:relative; display:flex; align-items:center; gap:8px; min-height:26px; border-left:1px solid var(--axis); padding:3px 0; }
+  .hbar .mark { height:16px; border-radius:0 4px 4px 0; background:var(--s1); flex:none; min-width:2px; }
+  .hbar .val { font-size:13px; color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .stack { display:flex; gap:2px; height:16px; flex:1; }
+  .stack .seg { height:100%; min-width:2px; }
+  .stack .seg:last-child { border-radius:0 4px 4px 0; }
+  .hit { cursor:default; outline:none; }
+  .hit:hover .mark, .hit:focus .mark, .seg:hover, .seg:focus { filter:brightness(1.12); }
+  .cols { display:flex; align-items:flex-end; gap:2px; height:170px; border-bottom:1px solid var(--axis); padding-top:22px; }
+  .cols .c { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; min-width:0; }
+  .cols .mark { width:min(24px, 70%); border-radius:4px 4px 0 0; background:var(--s1); min-height:0; }
+  .cols .cap { font-size:12px; color:var(--ink); font-variant-numeric:tabular-nums; margin-bottom:4px; }
+  .xlabels { display:flex; gap:2px; margin-top:6px; }
+  .xlabels span { flex:1; text-align:center; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; min-width:0; overflow:hidden; white-space:nowrap; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-2); margin-bottom:10px; }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .legend i { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  .meter { height:8px; border-radius:4px; background:var(--accent-wash); overflow:hidden; }
+  .meter > span { display:block; height:100%; border-radius:4px; background:var(--accent); }
+  .meter.warning > span { background:var(--warning); } .meter.critical > span { background:var(--critical); }
+  svg.line { width:100%; height:auto; display:block; overflow:visible; }
+  .tip { position:fixed; z-index:50; pointer-events:none; background:var(--raised); border:1px solid var(--ring); border-radius:8px; padding:8px 10px; box-shadow:0 6px 24px rgba(0,0,0,.14); font-size:12px; min-width:110px; }
+  .tip b { display:block; font-size:14px; font-variant-numeric:tabular-nums; }
+  .tip .k { display:flex; align-items:center; gap:6px; color:var(--ink-2); }
+  .tip .k i { width:10px; height:2px; display:inline-block; }
+
+  /* assistant */
+  .answer .q { color:var(--ink-2); font-size:13px; margin-bottom:6px; }
+  .examples { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .chip { border:1px solid var(--ring); background:var(--raised); border-radius:99px; padding:4px 12px; font-size:13px; cursor:pointer; color:var(--ink-2); }
+  .chip:hover { color:var(--ink); background:var(--hover); }
+
+  /* hiring board */
+  .board { display:flex; align-items:flex-start; gap:12px; overflow-x:auto; padding:2px 2px 10px; margin-top:16px; }
+  .col { min-width:210px; flex:1; background:var(--surface); border:1px solid var(--ring); border-radius:14px; padding:10px; }
+  .col h4 { margin:2px 4px 10px; font-size:12px; display:flex; align-items:center; gap:8px; color:var(--ink-2); font-weight:600; }
+  .col h4 .n { margin-left:auto; font-weight:500; color:var(--muted); }
+  .cand { border:1px solid var(--ring); border-radius:10px; padding:10px; margin-bottom:8px; cursor:pointer; background:var(--raised); }
+  .cand:hover, .cand:focus { border-color:var(--accent); outline:none; }
+  .cand b { display:block; font-size:14px; font-weight:600; }
+  .cand .meter { margin-top:8px; height:4px; }
+  .drop { border:1.5px dashed var(--axis); border-radius:12px; padding:18px; text-align:center; color:var(--ink-2); margin-top:14px; transition:background .15s; }
+  .drop.over { border-color:var(--accent); background:var(--accent-wash); }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; align-items:end; }
+  label.f { display:block; font-size:12px; color:var(--ink-2); }
+  label.f > div { margin-bottom:4px; }
+  .timeline { list-style:none; padding:0; margin:8px 0 0; border-left:1px solid var(--grid); }
+  .timeline li { position:relative; padding:4px 0 8px 16px; font-size:13px; }
+  .timeline li::before { content:""; position:absolute; left:-4px; top:10px; width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--surface); }
+  .fu { display:flex; gap:12px; align-items:center; padding:8px 0; border-bottom:1px solid var(--grid); }
+  .fu:last-child { border-bottom:0; }
+  .fu .when { width:92px; flex:none; font-variant-numeric:tabular-nums; color:var(--ink-2); font-size:13px; }
+
+  @media (max-width: 1100px) { .kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .kpis .hero { grid-column:1 / -1; } .tiles { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  @media (max-width: 860px) {
+    .app { grid-template-columns:1fr; }
+    .side { position:static; height:auto; flex-direction:row; align-items:center; overflow-x:auto; padding:8px 16px; border-right:0; border-bottom:1px solid var(--ring); }
+    .brand { padding:0 8px 0 0; } .brand span { display:none; }
+    .navbtn { width:auto; white-space:nowrap; } .navbtn .count { display:none; }
+    .side .foot { margin:0 0 0 auto; border:0; padding:0; flex-direction:row; align-items:center; }
+    .side .foot .who { display:none; }
+    .top { padding:12px 16px; flex-wrap:wrap; } .cmd { width:100%; margin:0; }
+    main { padding:16px 16px 40px; }
+    .g2, .g3 { grid-template-columns:1fr; }
+    .tiles { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .filters .asof { margin-left:0; }
+  }
+  @media (max-width: 480px) { .kpis, .tiles { grid-template-columns:1fr; } .hero .value { font-size:48px; } }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; scroll-behavior:auto !important; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>HR Agent Console</h1>
-  <nav id="nav" class="row hidden"></nav>
-  <span id="who" class="muted"></span>
-  <button id="logout" class="btn hidden">Log out</button>
-</header>
-<main>
-  <section id="login" class="card" style="max-width:380px;margin:40px auto">
-    <h2 style="margin-top:0">Sign in</h2>
+<section id="login" class="login">
+  <div class="card">
+    <div class="brand" style="padding:0 0 16px"><div class="logo">HR</div><span>HR Agent Console</span></div>
+    <h2 style="margin:0 0 4px;font-size:20px">Sign in</h2>
+    <p class="muted" style="margin:0 0 16px">Use the login from <code>setup_wsl.sh</code> or your admin.</p>
     <p><input id="u" placeholder="Username" autocomplete="username"></p>
     <p><input id="p" placeholder="Password" type="password" autocomplete="current-password"></p>
-    <button id="go" class="btn primary">Sign in</button> <span id="loginErr" class="err"></span>
-  </section>
-  <section id="ask" class="hidden">
-    <div class="card">
-      <textarea id="q" placeholder="Ask anything: 'Onboard Vikram Singh', 'I need sick leave 2026-10-12 to 2026-10-13', 'How many casual leave days do we get?'"></textarea>
-      <div class="row" style="margin-top:8px"><button id="send" class="btn primary">Send</button><span id="busy" class="muted"></span></div>
+    <div class="row"><button id="go" class="btn primary">Sign in</button> <span id="loginErr" class="err"></span></div>
+  </div>
+</section>
+
+<div id="app" class="app hidden">
+  <aside class="side">
+    <div class="brand"><div class="logo">HR</div><span>HR Agent Console</span></div>
+    <nav id="nav" style="display:contents"></nav>
+    <div class="foot">
+      <div class="who"><div id="who" style="font-weight:600"></div><div id="whoRole" class="muted"></div></div>
+      <div class="row" style="flex-wrap:nowrap">
+        <button id="theme" class="btn ghost" title="Switch between system, light and dark theme">Theme: system</button>
+        <button id="logout" class="btn ghost">Log out</button>
+      </div>
     </div>
-    <div id="answers"></div>
-  </section>
-  <section id="hiring" class="hidden">
-    <div class="card">
-      <div class="row"><strong>Job</strong> <select id="hJob" style="width:auto"></select>
-        <span class="muted" id="hRounds"></span><button id="hRoundsEdit" class="btn">Edit rounds</button>
-        <button id="hRefresh" class="btn">Refresh</button></div>
-      <div id="hDrop" class="drop" style="margin-top:10px">Drop resumes here (.pdf, .docx, .txt) or <label style="color:var(--accent);cursor:pointer">choose files<input id="hFiles" type="file" multiple accept=".pdf,.docx,.txt,.md" class="hidden"></label>. Files placed in the inbox folder are picked up automatically too.</div>
-      <div id="hMsg" class="muted" style="margin-top:6px"></div>
+  </aside>
+  <div class="content">
+    <div class="top">
+      <h1 id="pageTitle">Dashboard</h1>
+      <form id="cmdForm" class="cmd" role="search" autocomplete="off">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted)"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="cmd" placeholder="Ask the HR agents anything" aria-label="Ask the HR agents">
+        <kbd>Ctrl K</kbd>
+      </form>
     </div>
-    <div id="hBoard" class="board"></div>
-    <div id="hFollow" class="card" style="margin-top:12px"></div>
-    <div id="hDetail"></div>
-  </section>
-  <section id="approvals" class="hidden"><div class="card"><h3 style="margin-top:0">Waiting for your approval</h3><div id="apList"></div></div></section>
-  <section id="tickets" class="hidden"><div class="card"><h3 style="margin-top:0">Tickets</h3><div id="tkList"></div></div><div id="tkDetail"></div></section>
-  <section id="budget" class="hidden"><div class="card"><h3 style="margin-top:0">AI budget this month</h3><div id="bdList"></div></div></section>
-  <section id="outbox" class="hidden"><div class="card"><h3 style="margin-top:0">Email drafts (never sent automatically)</h3><div id="obList"></div></div></section>
-</main>
+    <main>
+      <!-- dashboard -->
+      <section id="dashboard" class="hidden">
+        <div class="filters">
+          <select id="dJob" aria-label="Job"></select>
+          <button id="dRefresh" class="btn">Refresh</button>
+          <a id="dExport" class="btn" href="/api/insights/candidates.csv" download>Export candidates (CSV)</a>
+          <span id="dAsOf" class="muted asof"></span>
+        </div>
+        <div id="dBody" class="chart">
+          <div class="kpis">
+            <div class="card hero"><div class="label">Active candidates</div><div id="kHero" class="value">–</div><div id="kHeroNote" class="muted"></div></div>
+            <div class="card tile"><div class="label">Interviews, next 7 days</div><div id="kInterviews" class="value">–</div><div class="note">scheduled rounds</div></div>
+            <div class="card tile"><div class="label">Offers out</div><div id="kOffers" class="value">–</div><div class="note">awaiting approval or answer</div></div>
+            <div class="card tile"><div class="label">Joining in 30 days</div><div id="kJoining" class="value">–</div><div class="note">new hires</div></div>
+            <div class="card tile"><div class="label">Follow-ups due</div><div id="kFollow" class="value">–</div><div class="note">today or overdue</div></div>
+          </div>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="card"><div class="card-head"><div><h3>Needs your attention</h3><div class="sub">The insights agent's picks, most urgent first</div></div></div><ul id="dAttn" class="attn"></ul></div>
+            <div class="card"><div class="card-head"><div><h3>Hiring funnel</h3><div class="sub">Candidates reaching each step</div></div><button class="btn ghost" data-table="cFunnel">Table</button></div><div id="cFunnel"></div></div>
+          </div>
+          <div class="section-title">Interviews and speed</div>
+          <div class="grid g2">
+            <div class="card"><div class="card-head"><div><h3>Results by round</h3><div class="sub">Decided interviews per round</div></div><button class="btn ghost" data-table="cRounds">Table</button></div><div id="cRounds"></div></div>
+            <div class="card"><div class="card-head"><div><h3>Speed and offers</h3><div class="sub">Average days from application</div></div></div>
+              <div class="tiles" style="margin-top:0;grid-template-columns:repeat(2,minmax(0,1fr))">
+                <div class="tile"><div class="label">To offer</div><div id="kToOffer" class="value">–</div></div>
+                <div class="tile"><div class="label">To acceptance</div><div id="kToAccept" class="value">–</div></div>
+                <div class="tile"><div class="label">To joining</div><div id="kToJoin" class="value">–</div></div>
+                <div class="tile"><div class="label">Offer acceptance</div><div id="kAccept" class="value">–</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="grid g2" style="margin-top:16px">
+            <div class="card"><div class="card-head"><div><h3>Missing must-have skills</h3><div class="sub">Among resumes screened out</div></div><button class="btn ghost" data-table="cSkills">Table</button></div><div id="cSkills"></div></div>
+            <div class="card"><div class="card-head"><div><h3>Jobs</h3><div class="sub">Candidates per opening</div></div></div><div id="cJobs" class="table-wrap"></div></div>
+          </div>
+          <div class="section-title">People</div>
+          <div class="tiles" style="margin-top:0">
+            <div class="card tile"><div class="label">Headcount</div><div id="kHead" class="value">–</div></div>
+            <div class="card tile"><div class="label">Leave requests pending</div><div id="kLeave" class="value">–</div><div id="kLeaveNote" class="note"></div></div>
+            <div class="card tile"><div class="label">Onboarding tasks done</div><div id="kOnb" class="value">–</div><div id="kOnbMeter" class="meter" style="margin-top:10px"><span></span></div><div id="kOnbNote" class="note"></div></div>
+            <div class="card tile"><div class="label">Open tickets</div><div id="kTickets" class="value">–</div><div id="kTicketsNote" class="note"></div></div>
+          </div>
+          <div class="grid g3" style="margin-top:16px">
+            <div class="card"><div class="card-head"><div><h3>Headcount by department</h3><div class="sub">Employees today</div></div><button class="btn ghost" data-table="cDept">Table</button></div><div id="cDept"></div></div>
+            <div class="card"><div class="card-head"><div><h3>Joiners by month</h3><div class="sub">New hires by start month</div></div><button class="btn ghost" data-table="cJoiners">Table</button></div><div id="cJoiners"></div></div>
+            <div class="card"><div class="card-head"><div><h3>Leave taken by type</h3><div class="sub">Approved working days</div></div><button class="btn ghost" data-table="cLeave">Table</button></div><div id="cLeave"></div></div>
+          </div>
+          <div class="section-title">AI usage</div>
+          <div class="grid g2">
+            <div class="card"><div class="card-head"><div><h3>AI spend per day</h3><div id="cSpendSub" class="sub">Last 30 days, US dollars</div></div><button class="btn ghost" data-table="cSpend">Table</button></div><div id="cSpend"></div></div>
+            <div class="card"><div class="card-head"><div><h3>Budget used this month</h3><div class="sub">Per agent; over 80% is flagged</div></div><button class="btn ghost" data-table="cBudget">Table</button></div><div id="cBudget"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- assistant -->
+      <section id="ask" class="hidden">
+        <div class="card">
+          <textarea id="q" placeholder="Ask anything: 'Onboard Vikram Singh', 'I need sick leave 2026-10-12 to 2026-10-13', 'How is hiring going?'"></textarea>
+          <div class="row" style="margin-top:10px"><button id="send" class="btn primary">Send</button><span id="busy" class="muted"></span></div>
+          <div id="examples" class="examples"></div>
+        </div>
+        <div id="answers"></div>
+      </section>
+
+      <!-- hiring -->
+      <section id="hiring" class="hidden">
+        <div class="card">
+          <div class="row"><select id="hJob" style="width:auto;min-width:240px" aria-label="Job"></select>
+            <span class="pill" id="hRounds"></span><button id="hRoundsEdit" class="btn ghost">Edit rounds</button>
+            <span style="margin-left:auto"></span><button id="hRefresh" class="btn">Refresh</button></div>
+          <div id="hDrop" class="drop">Drop resumes here (.pdf, .docx, .txt, .md) or <label style="color:var(--accent);cursor:pointer;font-weight:600">choose files<input id="hFiles" type="file" multiple accept=".pdf,.docx,.txt,.md" class="hidden"></label>.<div class="muted">Files placed in the inbox folder are picked up automatically too.</div></div>
+          <div id="hMsg" class="muted" style="margin-top:8px"></div>
+        </div>
+        <div id="hBoard" class="board"></div>
+        <div class="grid g2" style="margin-top:4px;align-items:start">
+          <div id="hFollow" class="card"></div>
+          <div id="hDetail"></div>
+        </div>
+      </section>
+
+      <section id="approvals" class="hidden"><div class="card"><h3>Waiting for your approval</h3><div class="sub">Offers, leave and anything else an agent may not decide alone</div><div id="apList"></div></div></section>
+      <section id="tickets" class="hidden"><div class="card"><h3>Tickets</h3><div class="sub">Errors and feedback the engineering agent works on</div><div id="tkList" class="table-wrap"></div></div><div id="tkDetail"></div></section>
+      <section id="budget" class="hidden"><div class="card"><h3>AI budget this month</h3><div class="sub">Spend per agent against its monthly budget</div><div id="bdList" class="table-wrap"></div></div></section>
+      <section id="outbox" class="hidden"><div class="card"><h3>Email drafts</h3><div class="sub">Never sent automatically; review and send from your mail client</div><div id="obList"></div></div></section>
+    </main>
+  </div>
+</div>
+<div id="tip" class="tip hidden" role="tooltip"></div>
+
 <script>
 const $ = id => document.getElementById(id);
-const el = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
+const el = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined && text !== null) e.textContent = text; if (cls) e.className = cls; return e; };
+const NS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v)); return e; };
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 let me = null;
 async function api(path, body) {
   const r = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
@@ -88,20 +329,54 @@ async function api(path, body) {
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;
 }
-const TABS = [['ask','Ask',()=>true],['hiring','Hiring',r=>['admin','hr'].includes(r)],['approvals','Approvals',r=>['admin','hr','manager'].includes(r)],['tickets','Tickets',r=>['admin','hr'].includes(r)],
-              ['budget','Budget',r=>['admin','hr'].includes(r)],['outbox','Outbox',r=>['admin','hr'].includes(r)]];
+
+// ---------------------------------------------------------------- theme
+const THEMES = ['system', 'light', 'dark'];
+function applyTheme(t) {
+  if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = t;
+  $('theme').textContent = 'Theme: ' + t; store.set('hr-theme', t);
+}
+applyTheme(store.get('hr-theme') || 'system');
+$('theme').onclick = () => applyTheme(THEMES[(THEMES.indexOf(store.get('hr-theme') || 'system') + 1) % 3]);
+
+// ---------------------------------------------------------------- navigation
+const ICONS = {
+  dashboard:'<path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>',
+  ask:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  hiring:'<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M17 11h6M20 8v6"/>',
+  approvals:'<path d="m9 12 2 2 4-4"/><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>',
+  tickets:'<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v8a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M13 6v12"/>',
+  budget:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  outbox:'<path d="M4 4h16v16H4z"/><path d="m4 6 8 7 8-7"/>',
+};
+const HR = r => ['admin','hr'].includes(r);
+const TABS = [['dashboard','Dashboard',HR],['ask','Assistant',()=>true],['hiring','Hiring',HR],['approvals','Approvals',r=>['admin','hr','manager'].includes(r)],
+              ['tickets','Tickets',HR],['budget','AI budget',HR],['outbox','Outbox',HR]];
 function show(tab) {
   TABS.forEach(([id]) => $(id).classList.toggle('hidden', id !== tab));
-  [...$('nav').children].forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  document.querySelector('main').classList.toggle('wide', tab === 'hiring');
-  ({hiring:loadHiring, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
+  [...$('nav').children].forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'); });
+  $('pageTitle').textContent = (TABS.find(t => t[0] === tab) || [])[1] || '';
+  store.set('hr-tab', tab);
+  ({dashboard:loadDashboard, hiring:loadHiring, approvals:loadApprovals, tickets:loadTickets, budget:loadBudget, outbox:loadOutbox}[tab] || (()=>{}))();
 }
 function start(user) {
-  me = user; $('login').classList.add('hidden'); $('logout').classList.remove('hidden');
-  $('who').textContent = `${user.username} (${user.role})`;
-  const nav = $('nav'); nav.replaceChildren(); nav.classList.remove('hidden');
-  TABS.filter(t => t[2](user.role)).forEach(([id, label]) => { const b = el('button', label); b.dataset.tab = id; b.onclick = () => show(id); nav.append(b); });
-  show('ask');
+  me = user; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  $('who').textContent = user.username; $('whoRole').textContent = user.role;
+  const nav = $('nav'); nav.replaceChildren();
+  TABS.filter(t => t[2](user.role)).forEach(([id, label]) => {
+    const b = el('button', undefined, 'navbtn'); b.dataset.tab = id;
+    const icon = svgEl('svg', {viewBox:'0 0 24 24', 'aria-hidden':'true'}); icon.innerHTML = ICONS[id]; // static icon markup, not data
+    b.append(icon, el('span', label)); if (id === 'approvals') b.append(Object.assign(el('span', '', 'count hidden'), {id:'apCount'}));
+    b.onclick = () => show(id); nav.append(b);
+  });
+  examples();
+  const saved = store.get('hr-tab'); const allowed = TABS.filter(t => t[2](user.role)).map(t => t[0]);
+  show(allowed.includes(saved) ? saved : allowed[0]);
+  refreshCounts();
+}
+async function refreshCounts() {
+  if (!['admin','hr','manager'].includes(me.role)) return;
+  try { const n = (await api('/api/approvals')).length; const c = $('apCount'); if (c) { c.textContent = n; c.classList.toggle('hidden', !n); } } catch {}
 }
 $('go').onclick = async () => {
   try { start(await api('/api/login', {username:$('u').value, password:$('p').value})); }
@@ -109,50 +384,235 @@ $('go').onclick = async () => {
 };
 $('p').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
 $('logout').onclick = async () => { await api('/api/logout', {}); location.reload(); };
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('cmd').focus(); } });
+$('cmdForm').onsubmit = e => { e.preventDefault(); const v = $('cmd').value.trim(); if (!v) return; $('cmd').value = ''; show('ask'); $('q').value = v; $('send').click(); };
+
+// ---------------------------------------------------------------- tooltip and chart helpers
+const tip = $('tip');
+function showTip(evt, value, label, color) {
+  tip.replaceChildren(el('b', value)); const k = el('div', undefined, 'k');
+  if (color) { const i = el('i'); i.style.background = color; k.append(i); }
+  k.append(el('span', label)); tip.append(k); tip.classList.remove('hidden');
+  let x, y; if (evt.clientX !== undefined && evt.type !== 'focus') { x = evt.clientX; y = evt.clientY; } else { const r = evt.target.getBoundingClientRect(); x = r.left + r.width / 2; y = r.top; }
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, x + 12)) + 'px';
+  tip.style.top = Math.max(8, y - h - 12) + 'px';
+}
+const hideTip = () => tip.classList.add('hidden');
+function hoverable(node, value, label, color) {
+  node.tabIndex = 0; node.classList.add('hit');
+  node.setAttribute('aria-label', `${label}: ${value}`);
+  ['pointermove','focus'].forEach(ev => node.addEventListener(ev, e => showTip(e, value, label, color)));
+  ['pointerleave','blur'].forEach(ev => node.addEventListener(ev, hideTip));
+}
+const fmt = n => n === null || n === undefined ? '–' : Number(n).toLocaleString();
+const usd = n => '$' + Number(n || 0).toFixed(n >= 10 ? 0 : 2);
+const tables = {};
+function setTable(id, head, rows) { tables[id] = {head, rows}; }
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-table]'); if (!b) return;
+  const id = b.dataset.table, box = $(id), t = tables[id]; if (!t) return;
+  if (box.dataset.view === 'table') { box.dataset.view = ''; b.textContent = 'Table'; return box.replaceChildren(...box._chart); }
+  box._chart = [...box.childNodes]; box.dataset.view = 'table'; b.textContent = 'Chart';
+  const tbl = el('table'); const hr = el('tr'); t.head.forEach((h, i) => hr.append(el('th', h, i ? 'num' : ''))); tbl.append(hr);
+  t.rows.forEach(r => { const tr = el('tr'); r.forEach((v, i) => tr.append(el('td', String(v ?? '–'), i ? 'num' : ''))); tbl.append(tr); });
+  box.replaceChildren(tbl);
+});
+function drawn(id) { const box = $(id); box.dataset.view = ''; const b = document.querySelector(`[data-table="${id}"]`); if (b) b.textContent = 'Table'; return box; }
+function hbars(id, rows, {format = fmt, unit = '', empty = 'No data yet.'} = {}) {
+  const box = drawn(id);
+  if (!rows.length || rows.every(r => !r.value)) return box.replaceChildren(el('div', empty, 'empty'));
+  const max = Math.max(...rows.map(r => r.value), 1); const g = el('div', undefined, 'hbar');
+  rows.forEach(r => {
+    const lab = el('div', r.label, 'lab'); lab.title = r.label;
+    const tr = el('div', undefined, 'track'); const m = el('div', undefined, 'mark');
+    m.style.width = `calc(${(r.value / max) * 100}% - 64px)`; tr.append(m, el('span', format(r.value), 'val'));
+    hoverable(tr, format(r.value) + unit, r.tip || r.label, 'var(--s1)'); g.append(lab, tr);
+  });
+  box.replaceChildren(g);
+}
+function stacks(id, rows, series) {
+  const box = drawn(id);
+  if (!rows.length) return box.replaceChildren(el('div', 'No interview results recorded yet.', 'empty'));
+  const leg = el('div', undefined, 'legend');
+  series.forEach(s => { const sp = el('span'); const i = el('i'); i.style.background = s.color; sp.append(i, document.createTextNode(s.label)); leg.append(sp); });
+  const max = Math.max(...rows.map(r => series.reduce((a, s) => a + (r[s.key] || 0), 0)), 1);
+  const g = el('div', undefined, 'hbar');
+  rows.forEach(r => {
+    const total = series.reduce((a, s) => a + (r[s.key] || 0), 0);
+    const tr = el('div', undefined, 'track'); const st = el('div', undefined, 'stack'); st.style.flex = 'none'; st.style.width = `calc(${(total / max) * 100}% - 110px)`;
+    series.forEach(s => { const v = r[s.key] || 0; if (!v) return; const seg = el('div', undefined, 'seg'); seg.style.flex = String(v); seg.style.background = s.color; hoverable(seg, fmt(v), `${r.label} · ${s.label}`, s.color); st.append(seg); });
+    tr.append(st, el('span', `${total}${r.note ? ' · ' + r.note : ''}`, 'val')); g.append(el('div', r.label, 'lab'), tr);
+  });
+  box.replaceChildren(leg, g);
+}
+function columns(id, rows, {format = fmt} = {}) {
+  const box = drawn(id);
+  if (!rows.some(r => r.value)) return box.replaceChildren(el('div', 'No data yet.', 'empty'));
+  const max = Math.max(...rows.map(r => r.value), 1); const c = el('div', undefined, 'cols'), xl = el('div', undefined, 'xlabels');
+  rows.forEach(r => {
+    const col = el('div', undefined, 'c'); const m = el('div', undefined, 'mark'); m.style.height = `${(r.value / max) * 100}%`;
+    if (r.value) col.append(el('span', format(r.value), 'cap')); col.append(m); hoverable(col, format(r.value), r.tip || r.label, 'var(--s1)');
+    c.append(col); xl.append(el('span', r.short || r.label));
+  });
+  box.replaceChildren(c, xl);
+}
+function line(id, points, {format = fmt} = {}) {
+  const box = drawn(id);
+  const W = 600, H = 180, L = 40, R = 52, T = 12, B = 22;
+  const max = Math.max(...points.map(p => p.y), 0);
+  const nice = max <= 0 ? 1 : Math.pow(10, Math.floor(Math.log10(max))) * Math.ceil(max / Math.pow(10, Math.floor(Math.log10(max))));
+  const X = i => L + (i / Math.max(points.length - 1, 1)) * (W - L - R), Y = v => T + (1 - v / nice) * (H - T - B);
+  const s = svgEl('svg', {class:'line', viewBox:`0 0 ${W} ${H}`, role:'img', 'aria-label':'AI spend per day'});
+  [0, nice / 2, nice].forEach(v => { s.append(svgEl('line', {x1:L, x2:W - R, y1:Y(v), y2:Y(v), stroke:v ? 'var(--grid)' : 'var(--axis)', 'stroke-width':1, 'vector-effect':'non-scaling-stroke'}));
+    const t = svgEl('text', {x:L - 6, y:Y(v) + 4, 'text-anchor':'end', 'font-size':11, fill:'var(--muted)'}); t.textContent = format(v); s.append(t); });
+  [0, Math.floor((points.length - 1) / 2), points.length - 1].forEach(i => { const t = svgEl('text', {x:X(i), y:H - 4, 'text-anchor':'middle', 'font-size':11, fill:'var(--muted)'}); t.textContent = points[i].label; s.append(t); });
+  const d = points.map((p, i) => `${i ? 'L' : 'M'}${X(i)},${Y(p.y)}`).join('');
+  s.append(svgEl('path', {d:`${d}L${X(points.length - 1)},${Y(0)}L${X(0)},${Y(0)}Z`, fill:'var(--s1)', opacity:.1}));
+  s.append(svgEl('path', {d, fill:'none', stroke:'var(--s1)', 'stroke-width':2, 'stroke-linejoin':'round', 'stroke-linecap':'round', 'vector-effect':'non-scaling-stroke'}));
+  const last = points[points.length - 1];
+  s.append(svgEl('circle', {cx:X(points.length - 1), cy:Y(last.y), r:4, fill:'var(--s1)', stroke:'var(--surface)', 'stroke-width':2}));
+  const end = svgEl('text', {x:X(points.length - 1) + 8, y:Y(last.y) + 4, 'font-size':12, fill:'var(--ink)'}); end.textContent = format(last.y); s.append(end);
+  const cross = svgEl('line', {y1:T, y2:H - B, stroke:'var(--axis)', 'stroke-width':1, 'vector-effect':'non-scaling-stroke', visibility:'hidden'}); s.append(cross);
+  const hitArea = svgEl('rect', {x:L, y:0, width:W - L - R, height:H, fill:'transparent'}); s.append(hitArea);
+  s.tabIndex = 0;
+  const at = i => { const p = points[i]; cross.setAttribute('x1', X(i)); cross.setAttribute('x2', X(i)); cross.setAttribute('visibility', 'visible'); return p; };
+  s.addEventListener('pointermove', e => { const r = s.getBoundingClientRect(); const vx = (e.clientX - r.left) / r.width * W;
+    const i = Math.max(0, Math.min(points.length - 1, Math.round((vx - L) / (W - L - R) * (points.length - 1)))); const p = at(i); showTip(e, format(p.y), `${p.tip || p.label} · ${p.extra || ''}`, 'var(--s1)'); });
+  s.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); hideTip(); });
+  s.addEventListener('focus', e => { const p = at(points.length - 1); showTip(e, format(p.y), p.tip || p.label, 'var(--s1)'); });
+  s.addEventListener('blur', () => { cross.setAttribute('visibility', 'hidden'); hideTip(); });
+  box.replaceChildren(s);
+}
+const STATUS_ICON = {
+  critical:'<circle cx="8" cy="8" r="7" fill="var(--critical)"/><path d="M8 4.5v4.2M8 11v.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>',
+  warning:'<path d="M8 1.5 15 14H1z" fill="var(--warning)"/><path d="M8 6v3.6M8 11.5v.3" stroke="#0b0b0b" stroke-width="1.6" stroke-linecap="round"/>',
+  info:'<circle cx="8" cy="8" r="7" fill="none" stroke="var(--accent)" stroke-width="1.6"/><path d="M8 7.2V11.5M8 4.8v.3" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/>',
+  good:'<circle cx="8" cy="8" r="7" fill="var(--good)"/><path d="m5 8.2 2 2 4-4" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/>',
+};
+const STATUS_LABEL = {critical:'Urgent', warning:'Soon', info:'To do', good:'Done'};
+function statusTag(kind) { const s = el('span', undefined, 'status'); const i = svgEl('svg', {viewBox:'0 0 16 16', 'aria-hidden':'true'}); i.innerHTML = STATUS_ICON[kind] || STATUS_ICON.info; s.append(i, el('span', STATUS_LABEL[kind] || 'To do')); return s; }
+
+// ---------------------------------------------------------------- dashboard
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let dJobsLoaded = false;
+async function loadDashboard() {
+  $('dBody').classList.add('loading');
+  const job = $('dJob').value;
+  let d; try { d = await api('/api/insights' + (job ? `?job=${encodeURIComponent(job)}` : '')); } catch (e) { $('dBody').classList.remove('loading'); return $('dAsOf').textContent = e.message; }
+  $('dBody').classList.remove('loading');
+  if (!dJobsLoaded) { const sel = $('dJob'); sel.replaceChildren(Object.assign(el('option', 'All jobs'), {value:''}), ...d.hiring.jobs.map(j => Object.assign(el('option', `${j.title} (${j.job_id})`), {value:j.job_id}))); dJobsLoaded = true; }
+  $('dExport').href = '/api/insights/candidates.csv' + (job ? `?job=${encodeURIComponent(job)}` : '');
+  $('dAsOf').textContent = 'As of ' + d.as_of;
+  const k = d.kpis, h = d.hiring;
+  $('kHero').textContent = fmt(k.active_candidates); $('kHeroNote').textContent = `across ${k.open_jobs} open job${k.open_jobs === 1 ? '' : 's'}`;
+  $('kInterviews').textContent = fmt(k.interviews_7d); $('kOffers').textContent = fmt(k.offers_out); $('kJoining').textContent = fmt(k.joining_30d); $('kFollow').textContent = fmt(k.followups_due);
+  $('kToOffer').textContent = h.time_to_offer_days ?? '–'; $('kToAccept').textContent = h.time_to_accept_days ?? '–'; $('kToJoin').textContent = h.time_to_join_days ?? '–';
+  $('kAccept').textContent = h.offer_acceptance_pct === null ? '–' : h.offer_acceptance_pct + '%';
+  $('kHead').textContent = fmt(k.headcount); $('kLeave').textContent = fmt(k.leave_pending); $('kLeaveNote').textContent = `${d.leave.upcoming_days_30} approved days in the next 30`;
+  const ob = d.onboarding; $('kOnb').textContent = ob.pct_done === null ? '–' : ob.pct_done + '%'; $('kOnbMeter').firstElementChild.style.width = (ob.pct_done || 0) + '%';
+  $('kOnbNote').textContent = ob.tasks ? `${ob.done} of ${ob.tasks} · ${ob.blocked} blocked · ${ob.overdue} overdue` : 'No onboarding tasks yet';
+  $('kTickets').textContent = fmt(k.open_tickets); $('kTicketsNote').textContent = d.operations.helpful_pct === null ? 'no answer feedback yet' : `${d.operations.helpful_pct}% of answers rated helpful`;
+
+  const attn = $('dAttn'); attn.replaceChildren();
+  if (!d.attention.length) { const li = el('li'); li.append(statusTag('good'), el('span', 'Nothing needs attention right now.', 'txt')); attn.append(li); }
+  d.attention.forEach(a => { const li = el('li'); const go = el('button', 'Open', 'btn ghost');
+    go.onclick = () => { show(a.tab); if (a.tab === 'hiring' && a.ref) setTimeout(() => candidate(a.ref), 300); if (a.tab === 'tickets' && a.ref) ticket(a.ref); };
+    li.append(statusTag(a.kind), el('span', a.text, 'txt'), go); attn.append(li); });
+
+  hbars('cFunnel', h.funnel.map(f => ({label:f.label, value:f.count, tip:`${f.label} · ${f.pct_of_applied}% of applicants`})), {empty:'No candidates yet. Drop resumes on the Hiring tab.'});
+  setTable('cFunnel', ['Step', 'Candidates', '% of applied'], h.funnel.map(f => [f.label, f.count, f.pct_of_applied + '%']));
+  const S = [{key:'pass', label:'Passed', color:'var(--s1)'}, {key:'hold', label:'On hold', color:'var(--s3)'}, {key:'fail', label:'Failed', color:'var(--s2)'}];
+  stacks('cRounds', h.rounds.filter(r => r.pass + r.fail + r.hold).map(r => ({...r, label:r.round, note:r.avg_rating ? `avg ${r.avg_rating}/5` : ''})), S);
+  setTable('cRounds', ['Round', 'Passed', 'On hold', 'Failed', 'Pass rate', 'Avg rating', 'Scheduled'], h.rounds.map(r => [r.round, r.pass, r.hold, r.fail, r.pass_rate === null ? '–' : r.pass_rate + '%', r.avg_rating ?? '–', r.scheduled]));
+  hbars('cSkills', h.missing_skills.map(m => ({label:m.skill, value:m.candidates, tip:`${m.skill} · candidates missing it`})), {empty:'No screened-out resumes yet.'});
+  setTable('cSkills', ['Skill', 'Candidates missing it'], h.missing_skills.map(m => [m.skill, m.candidates]));
+  const jt = el('table'); const head = el('tr'); ['Job', 'Active', 'Rejected', 'Joined', 'Avg score'].forEach((x, i) => head.append(el('th', x, i ? 'num' : ''))); jt.append(head);
+  h.jobs.forEach(j => { const tr = el('tr', undefined, 'click'); const t0 = el('td'); t0.append(el('div', j.title), el('div', j.job_id, 'muted'));
+    tr.append(t0, ...[j.active, j.rejected, j.joined, j.avg_score ?? '–'].map(v => el('td', String(v), 'num')));
+    tr.onclick = () => { show('hiring'); setTimeout(() => { $('hJob').value = j.job_id; drawBoard(); }, 300); }; jt.append(tr); });
+  $('cJobs').replaceChildren(h.jobs.length ? jt : el('div', 'No jobs.', 'empty'));
+
+  hbars('cDept', d.workforce.by_department.map(x => ({label:x.department, value:x.count})));
+  setTable('cDept', ['Department', 'Employees'], d.workforce.by_department.map(x => [x.department, x.count]));
+  const jm = d.workforce.joiners_by_month.map(m => { const [y, mo] = m.month.split('-'); return {label:m.month, short:MONTHS[+mo - 1], tip:`${MONTHS[+mo - 1]} ${y}`, value:m.count}; });
+  columns('cJoiners', jm); setTable('cJoiners', ['Month', 'Joiners'], jm.map(m => [m.tip, m.value]));
+  hbars('cLeave', d.leave.days_by_type.map(x => ({label:x.type, value:x.days})), {unit:' days', empty:'No approved leave yet.'});
+  setTable('cLeave', ['Leave type', 'Days'], d.leave.days_by_type.map(x => [x.type, x.days]));
+
+  const ai = d.ai; const pts = ai.daily.map(p => { const [, mo, dd] = p.day.split('-'); return {label:`${+dd} ${MONTHS[+mo - 1]}`, y:p.usd, extra:`${p.calls} call${p.calls === 1 ? '' : 's'}`}; });
+  line('cSpend', pts, {format:v => '$' + Number(v).toFixed(v && v < 1 ? 2 : 0)});
+  setTable('cSpend', ['Day', 'Spend (USD)', 'Calls'], ai.daily.map(p => [p.day, p.usd.toFixed(4), p.calls]));
+  $('cSpendSub').textContent = `Last 30 days, US dollars · ${usd(ai.total.spent_usd)} of ${usd(ai.total.budget_usd)} this month` + (ai.cache_hit_pct !== null ? ` · ${ai.cache_hit_pct}% prompt tokens cached` : '');
+  const bl = el('div'); ai.agents.forEach(a => {
+    const kind = a.used_pct >= 100 ? 'critical' : a.used_pct >= 80 ? 'warning' : '';
+    const r = el('div'); r.style.margin = '0 0 12px';
+    const top = el('div', undefined, 'row'); top.append(el('span', a.agent)); if (kind) top.append(statusTag(kind));
+    top.append(Object.assign(el('span', `${usd(a.spent_usd)} of ${usd(a.budget_usd)} · ${a.used_pct}%`, 'muted'), {style:'margin-left:auto'}));
+    const m = el('div', undefined, 'meter ' + kind); const sp = el('span'); sp.style.width = Math.min(100, a.used_pct) + '%'; m.append(sp); m.style.marginTop = '6px';
+    hoverable(m, a.used_pct + '%', `${a.agent} · ${a.calls} calls`, 'var(--accent)'); r.append(top, m); bl.append(r); });
+  drawn('cBudget').replaceChildren(bl);
+  setTable('cBudget', ['Agent', 'Spent (USD)', 'Budget (USD)', 'Used', 'Calls'], ai.agents.map(a => [a.agent, a.spent_usd.toFixed(4), a.budget_usd.toFixed(2), a.used_pct + '%', a.calls]));
+  refreshCounts();
+}
+$('dJob').onchange = loadDashboard; $('dRefresh').onclick = loadDashboard;
+
+// ---------------------------------------------------------------- assistant
+function examples() {
+  const list = HR(me.role) ? ['What needs my attention today?', 'How is hiring going?', 'Read the new resumes in the inbox', 'What follow-ups are due this week?', 'Onboard Vikram Singh']
+    : ['How many casual leave days do we get?', 'I need casual leave on 2026-10-08', 'Who approves my leave?'];
+  $('examples').replaceChildren(...list.map(x => { const c = el('button', x, 'chip'); c.onclick = () => { $('q').value = x; $('send').click(); }; return c; }));
+}
 $('send').onclick = async () => {
   const q = $('q').value.trim(); if (!q) return;
-  $('busy').textContent = 'Working...';
-  const card = el('div', undefined, 'card'); card.append(el('div', q, 'muted'));
+  $('busy').textContent = 'Working...'; $('send').disabled = true;
+  const card = el('div', undefined, 'card answer'); card.append(el('div', q, 'q'));
   try {
     const r = await api('/api/ask', {request:q, conversation_id:'web'});
     card.append(el('pre', r.result));
-    card.append(el('div', `${r.agent} agent · ${r.mode} · ${r.trace.length} tool calls`, 'muted'));
-    const row = el('div', undefined, 'row');
-    const up = el('button', '👍 Helpful', 'btn'), down = el('button', '👎 Wrong or unhelpful', 'btn');
-    up.onclick = () => api('/api/feedback', {request:q, answer:r.result, rating:1, agent:r.agent}).then(() => row.replaceChildren(el('span','Thanks!','muted')));
+    const meta = el('div', undefined, 'row'); meta.style.marginTop = '10px';
+    meta.append(el('span', `${r.agent} agent`, 'pill'), el('span', `${r.mode} · ${r.trace.length} tool call${r.trace.length === 1 ? '' : 's'}`, 'muted'));
+    const up = el('button', '👍 Helpful', 'btn ghost'), down = el('button', '👎 Wrong or unhelpful', 'btn ghost');
+    const fb = el('span'); fb.style.marginLeft = 'auto'; fb.append(up, down);
+    up.onclick = () => api('/api/feedback', {request:q, answer:r.result, rating:1, agent:r.agent}).then(() => fb.replaceChildren(el('span','Thanks!','muted')));
     down.onclick = async () => {
       const comment = prompt('What was wrong? (this becomes a ticket)') || '';
       const f = await api('/api/feedback', {request:q, answer:r.result, rating:-1, comment, agent:r.agent});
-      row.replaceChildren(el('span', `Thanks, logged as ticket #${f.ticket_id}`, 'muted'));
+      fb.replaceChildren(el('span', `Thanks, logged as ticket #${f.ticket_id}`, 'muted'));
     };
-    row.append(up, down); card.append(row);
+    meta.append(fb); card.append(meta);
   } catch (e) { card.append(el('div', e.message, 'err')); }
-  $('answers').prepend(card); $('busy').textContent = ''; $('q').value = '';
+  $('answers').prepend(card); $('busy').textContent = ''; $('q').value = ''; $('send').disabled = false;
 };
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('send').click(); });
+
+// ---------------------------------------------------------------- approvals, tickets, budget, outbox
 async function loadApprovals() {
   const list = await api('/api/approvals'); const box = $('apList'); box.replaceChildren();
-  if (!list.length) return box.append(el('div', 'Nothing waiting.', 'muted'));
+  if (!list.length) return box.append(el('div', 'Nothing waiting.', 'empty'));
   list.forEach(a => {
-    const row = el('div', undefined, 'card'); row.append(el('div', `#${a.id} ${a.kind}: ${a.summary}`), el('div', `requested by ${a.requested_by} at ${a.created_at}`, 'muted'));
-    const b = el('div', undefined, 'row');
-    [['Approve', true], ['Reject', false]].forEach(([l, v]) => { const x = el('button', l, v ? 'btn primary' : 'btn'); x.onclick = async () => { await api(`/api/approvals/${a.id}`, {approve:v}); loadApprovals(); }; b.append(x); });
-    row.append(b); box.append(row);
+    const row = el('div', undefined, 'fu'); const txt = el('div'); txt.style.flex = '1';
+    txt.append(el('div', a.summary), el('div', `#${a.id} · ${a.kind} · requested by ${a.requested_by} · ${a.created_at}`, 'muted'));
+    row.append(el('span', a.kind, 'pill'), txt);
+    [['Approve', true], ['Reject', false]].forEach(([l, v]) => { const x = el('button', l, v ? 'btn primary' : 'btn'); x.onclick = async () => { await api(`/api/approvals/${a.id}`, {approve:v}); loadApprovals(); refreshCounts(); }; row.append(x); });
+    box.append(row);
   });
 }
 async function loadTickets() {
   const list = await api('/api/tickets'); const t = el('table');
-  t.append(Object.assign(el('tr'), {innerHTML:'<th>#</th><th>Title</th><th>Kind</th><th>Status</th><th>Seen</th>'}));
-  list.forEach(k => { const tr = el('tr'); [k.id, k.title, k.kind, k.status, k.occurrences].forEach(v => tr.append(el('td', String(v ?? '')))); tr.style.cursor='pointer'; tr.onclick = () => ticket(k.id); t.append(tr); });
-  $('tkList').replaceChildren(list.length ? t : el('div', 'No tickets.', 'muted'));
+  const hr = el('tr'); ['#','Title','Kind','Status','Seen'].forEach(h => hr.append(el('th', h))); t.append(hr);
+  list.forEach(k => { const tr = el('tr', undefined, 'click'); tr.append(el('td', String(k.id)), el('td', k.title)); const kd = el('td'); kd.append(el('span', k.kind, 'pill'));
+    const st = el('td'); st.append(el('span', k.status, 'pill')); tr.append(kd, st, el('td', String(k.occurrences))); tr.onclick = () => ticket(k.id); t.append(tr); });
+  $('tkList').replaceChildren(list.length ? t : el('div', 'No tickets.', 'empty'));
 }
 async function ticket(id) {
-  const k = await api(`/api/tickets/${id}`); const c = el('div', undefined, 'card');
-  c.append(el('h3', `#${k.id} ${k.title}`), el('div', `${k.kind} · ${k.severity} · ${k.status}${k.pr_url ? ' · ' + k.pr_url : ''}`, 'muted'), el('pre', k.detail));
-  if (k.review) c.append(el('div', 'AI review'), el('pre', k.review));
-  if (k.patch) c.append(el('div', 'Proposed patch'), el('pre', k.patch));
-  if (k.resolution) c.append(el('div', 'Resolution: ' + k.resolution));
-  c.append(el('div', 'History'), el('pre', k.events.map(e => `${e.ts} ${e.actor}: ${e.event} ${e.detail || ''}`).join('\n')));
-  const row = el('div', undefined, 'row');
+  const k = await api(`/api/tickets/${id}`); const c = el('div', undefined, 'card'); c.style.marginTop = '16px';
+  c.append(el('h3', `#${k.id} ${k.title}`), el('div', `${k.kind} · ${k.severity} · ${k.status}${k.pr_url ? ' · ' + k.pr_url : ''}`, 'sub'), el('pre', k.detail));
+  if (k.review) c.append(el('div', 'AI review', 'section-title'), el('pre', k.review));
+  if (k.patch) c.append(el('div', 'Proposed patch', 'section-title'), el('pre', k.patch));
+  if (k.resolution) c.append(el('p', 'Resolution: ' + k.resolution));
+  c.append(el('div', 'History', 'section-title'), el('pre', k.events.map(e => `${e.ts} ${e.actor}: ${e.event} ${e.detail || ''}`).join('\n')));
+  const row = el('div', undefined, 'row'); row.style.marginTop = '12px';
   if (me.role === 'admin' && ['new','triaged'].includes(k.status)) { const w = el('button', 'Let the agent work it', 'btn primary'); w.onclick = async () => { w.textContent='Working...'; await api(`/api/tickets/${id}/work`, {}); ticket(id); loadTickets(); }; row.append(w); }
   if (me.role === 'admin' && k.status === 'awaiting_approval') {
     [['Approve and merge', true], ['Reject', false]].forEach(([l, v]) => { const x = el('button', l, v ? 'btn primary' : 'btn'); x.onclick = async () => { const note = v ? '' : (prompt('Reason?') || ''); await api(`/api/tickets/${id}/decide`, {approve:v, note}); ticket(id); loadTickets(); }; row.append(x); });
@@ -161,18 +621,23 @@ async function ticket(id) {
 }
 async function loadBudget() {
   const b = await api('/api/budget'); const t = el('table');
-  t.append(Object.assign(el('tr'), {innerHTML:'<th>Agent</th><th>Spent</th><th>Budget</th><th>Used</th><th>Calls</th><th>When over</th>'}));
-  b.agents.forEach(a => { const tr = el('tr'); [a.agent, '$' + a.spent_usd.toFixed(4), '$' + a.budget_usd.toFixed(2)].forEach(v => tr.append(el('td', v)));
-    const bar = el('div', undefined, 'bar'); const s = el('span'); s.style.width = Math.min(100, a.used_pct) + '%'; bar.append(s); const td = el('td'); td.append(bar, el('span', a.used_pct + '%', 'muted')); tr.append(td, el('td', String(a.calls)), el('td', a.on_exceed)); t.append(tr); });
+  const hr = el('tr'); ['Agent','Spent','Budget','Used','Calls','When over'].forEach((h, i) => hr.append(el('th', h, [1,2,4].includes(i) ? 'num' : ''))); t.append(hr);
+  b.agents.forEach(a => { const tr = el('tr'); tr.append(el('td', a.agent), el('td', '$' + a.spent_usd.toFixed(4), 'num'), el('td', '$' + a.budget_usd.toFixed(2), 'num'));
+    const kind = a.used_pct >= 100 ? 'critical' : a.used_pct >= 80 ? 'warning' : '';
+    const m = el('div', undefined, 'meter ' + kind); const s = el('span'); s.style.width = Math.min(100, a.used_pct) + '%'; m.append(s);
+    const td = el('td'); td.style.minWidth = '140px'; td.append(m, el('span', a.used_pct + '%', 'muted')); if (kind) td.append(statusTag(kind));
+    tr.append(td, el('td', String(a.calls), 'num'), el('td', a.on_exceed)); t.append(tr); });
   $('bdList').replaceChildren(t, el('p', `Total: $${b.total.spent_usd.toFixed(4)} of $${b.total.budget_usd.toFixed(2)} since ${b.month_from}`, 'muted'));
 }
 async function loadOutbox() {
   const list = await api('/api/outbox'); const box = $('obList'); box.replaceChildren();
-  list.forEach(m => { const c = el('div', undefined, 'card'); c.append(el('div', `To: ${m.to_addr}`), el('strong', m.subject), el('pre', m.body), el('div', `${m.status} · ${m.created_at}`, 'muted')); box.append(c); });
-  if (!list.length) box.append(el('div', 'No drafts.', 'muted'));
+  list.forEach(m => { const c = el('div'); c.style.cssText = 'border-top:1px solid var(--grid);padding:12px 0';
+    c.append(el('div', `To: ${m.to_addr} · ${m.status} · ${m.created_at}`, 'muted'), el('strong', m.subject), el('pre', m.body)); box.append(c); });
+  if (!list.length) box.append(el('div', 'No drafts.', 'empty'));
 }
+
 // ---------------------------------------------------------------- hiring
-const LABEL = {applied:'Applied', selected:'Selected', on_hold:'On hold', offer:'Offer', offer_accepted:'Accepted', joined:'Joined', rejected:'Rejected'};
+const LABEL = {applied:'Applied', selected:'Selected', on_hold:'On hold', interviewing:'Interviewing', offer:'Offer', offer_accepted:'Accepted', joined:'Joined', rejected:'Rejected', offer_declined:'Declined', withdrawn:'Withdrawn'};
 let hBoards = [];
 async function loadHiring() {
   const data = await api('/api/hiring/board');
@@ -186,9 +651,15 @@ function drawBoard() {
   const b = hBoards.find(x => x.job_id === $('hJob').value) || hBoards[0]; if (!b) return;
   $('hRounds').textContent = 'Rounds: ' + b.rounds.join(' → ');
   $('hBoard').replaceChildren(...b.columns.map(c => {
-    const col = el('div', undefined, 'col'); const h = el('h4'); h.append(el('span', LABEL[c.key] || c.key), el('span', String(c.count))); col.append(h);
-    c.candidates.forEach(x => { const card = el('div', undefined, 'cand'); card.append(el('b', x.name), el('span', `${x.id} · score ${x.score ?? '-'}`, 'muted'), el('div', x.status_note || '', 'muted'));
-      card.onclick = () => candidate(x.id); col.append(card); });
+    const col = el('div', undefined, 'col'); const h = el('h4'); const dot = el('span', undefined, 'dot');
+    dot.style.background = c.key === 'rejected' ? 'var(--muted)' : c.key === 'joined' ? 'var(--good)' : b.rounds.includes(c.key) ? 'var(--s1)' : 'var(--axis)';
+    h.append(dot, el('span', LABEL[c.key] || c.key), el('span', String(c.count), 'n')); col.append(h);
+    if (!c.candidates.length) col.append(el('div', '—', 'muted'));
+    c.candidates.forEach(x => { const card = el('div', undefined, 'cand'); card.tabIndex = 0;
+      card.append(el('b', x.name), el('span', `${x.id} · score ${x.score ?? '–'}`, 'muted'));
+      if (x.status_note) card.append(el('div', x.status_note, 'muted'));
+      if (x.score !== null && x.score !== undefined) { const m = el('div', undefined, 'meter'); const s = el('span'); s.style.width = Math.min(100, x.score) + '%'; m.append(s); card.append(m); }
+      card.onclick = () => candidate(x.id); card.onkeydown = e => { if (e.key === 'Enter') candidate(x.id); }; col.append(card); });
     return col;
   }));
 }
@@ -212,18 +683,24 @@ $('hFiles').onchange = e => upload(e.target.files);
 ['dragleave','drop'].forEach(ev => $('hDrop').addEventListener(ev, e => { e.preventDefault(); $('hDrop').classList.remove('over'); }));
 $('hDrop').addEventListener('drop', e => upload(e.dataTransfer.files));
 async function loadFollowups() {
-  const r = await api('/api/hiring/followups?days=14'); const box = $('hFollow'); box.replaceChildren(el('h3', 'Follow-ups (next 14 days)'));
-  if (!r.followups.length) box.append(el('div', 'Nothing due.', 'muted'));
-  r.followups.forEach(f => { const row = el('div', undefined, 'row'); row.append(el('span', `${f.due}  ${f.name}: ${f.note}`));
-    const d = el('button', 'Done', 'btn'); d.onclick = async () => { await api(`/api/hiring/followups/${f.id}/done`, {}); loadFollowups(); }; row.append(d); box.append(row); });
+  const r = await api('/api/hiring/followups?days=14'); const box = $('hFollow');
+  box.replaceChildren(el('h3', 'Follow-ups'), el('div', 'Due in the next 14 days, and anything overdue', 'sub'));
+  if (!r.followups.length) box.append(el('div', 'Nothing due.', 'empty'));
+  const today = new Date().toISOString().slice(0, 10);
+  r.followups.forEach(f => { const row = el('div', undefined, 'fu'); const txt = el('div'); txt.style.flex = '1'; txt.append(el('div', f.note), el('div', f.name, 'muted'));
+    row.append(el('span', f.due, 'when'), txt); if (f.due < today) row.append(statusTag('critical'));
+    const d = el('button', 'Done', 'btn ghost'); d.onclick = async () => { await api(`/api/hiring/followups/${f.id}/done`, {}); loadFollowups(); }; row.append(d); box.append(row); });
 }
-function field(label, input) { const w = el('label', undefined, 'muted'); w.append(el('div', label), input); return w; }
+function field(label, input) { const w = el('label', undefined, 'f'); w.append(el('div', label), input); return w; }
 function inp(type, ph) { const i = el('input'); i.type = type; if (ph) i.placeholder = ph; return i; }
 async function candidate(id) {
   const t = await api(`/api/hiring/candidates/${id}`); const c = t.candidate; const box = el('div', undefined, 'card');
-  box.append(el('h3', `${c.name} · ${c.id}`), el('div', `${LABEL[c.stage] || c.stage} · score ${c.score ?? '-'} · ${c.years ?? 0} yrs · ${c.email || ''} ${c.phone || ''}`, 'muted'),
-             el('div', `Skills: ${(c.skills || []).join(', ') || '-'}`), el('div', c.status_note || '', 'muted'));
-  const act = el('div', undefined, 'grid2'); act.style.marginTop = '10px';
+  const head = el('div', undefined, 'card-head'); const hd = el('div'); hd.append(el('h3', c.name), el('div', `${c.id} · ${c.email || ''} ${c.phone || ''}`, 'sub'));
+  const close = el('button', 'Close', 'btn ghost'); close.onclick = () => $('hDetail').replaceChildren(); head.append(hd, close);
+  const facts = el('div', undefined, 'row'); facts.append(el('span', LABEL[c.stage] || c.stage, 'pill'), el('span', `score ${c.score ?? '–'}`, 'pill'), el('span', `${c.years ?? 0} yrs`, 'pill'));
+  box.append(head, facts, el('p', `Skills: ${(c.skills || []).join(', ') || '–'}`, 'ink2'));
+  if (c.status_note) box.append(el('p', c.status_note, 'muted'));
+  const act = el('div', undefined, 'grid2'); act.style.marginTop = '12px';
   const say = el('div', '', 'muted');
   const run = async (action, body) => { try { await api(`/api/hiring/candidates/${c.id}/${action}`, body); await loadHiring(); candidate(c.id); } catch (e) { say.textContent = e.message; say.className = 'err'; } };
   if (['selected','interviewing','on_hold'].includes(c.stage)) {
@@ -232,7 +709,7 @@ async function candidate(id) {
     const go = el('button', 'Schedule round', 'btn primary'); go.onclick = () => run('schedule', {round: r.value, when: when.value, interviewer: who.value});
     act.append(field('Round', r), field('When', when), field('Interviewer', who), go);
     const res = el('select'); ['pass','fail','hold'].forEach(n => { const o = el('option', n); o.value = n; res.append(o); });
-    const rating = el('select'); ['', '1','2','3','4','5'].forEach(n => { const o = el('option', n || 'rating'); o.value = n; rating.append(o); });
+    const rating = el('select'); ['', '1','2','3','4','5'].forEach(n => { const o = el('option', n || 'Rating'); o.value = n; rating.append(o); });
     const fb = inp('text', 'Panel feedback'); const r2 = r.cloneNode(true); r2.value = r.value;
     const rec = el('button', 'Record result', 'btn primary'); rec.onclick = () => run('result', {round: r2.value, result: res.value, rating: rating.value, feedback: fb.value});
     act.append(field('Round', r2), field('Result', res), field('Rating', rating), field('Feedback', fb), rec);
@@ -242,14 +719,18 @@ async function candidate(id) {
   if (t.offers.some(o => o.status === 'sent')) { const jd = inp('date'); const y = el('button', 'Offer accepted', 'btn primary'), n = el('button', 'Offer declined', 'btn');
     y.onclick = () => run('offer_response', {accepted: true, joining_date: jd.value}); n.onclick = () => run('offer_response', {accepted: false}); act.append(field('Joining date (if changed)', jd), y, n); }
   if (c.stage === 'offer_accepted') { const j = el('button', 'Mark joined', 'btn primary'); j.onclick = () => run('joined', {}); act.append(j); }
-  const mv = el('select'); ['selected','on_hold','rejected','withdrawn'].forEach(n => { const o = el('option', n); o.value = n; mv.append(o); });
+  const mv = el('select'); ['selected','on_hold','rejected','withdrawn'].forEach(n => { const o = el('option', LABEL[n]); o.value = n; mv.append(o); });
   const note = inp('text', 'Reason'); const m = el('button', 'Move', 'btn'); m.onclick = () => run('move', {stage: mv.value, note: note.value});
   act.append(field('Move to', mv), field('Note', note), m);
   box.append(act, say);
-  if (t.interviews.length) { box.append(el('h4', 'Interviews')); t.interviews.forEach(i => box.append(el('div', `${i.round} · ${i.scheduled_at || ''} · ${i.interviewer || ''} · ${i.status}${i.result ? ' · ' + i.result : ''}${i.rating ? ' · ' + i.rating + '/5' : ''} ${i.feedback || ''}`))); }
-  if (t.offers.length) { box.append(el('h4', 'Offers')); t.offers.forEach(o => box.append(el('div', `${o.ctc_lpa} LPA · joining ${o.joining_date} · ${o.status}`))); }
-  box.append(el('h4', 'Timeline'), el('pre', t.events.map(e => `${e.ts}  ${e.actor}: ${e.event} ${e.detail || ''}`).join('\n')));
-  $('hDetail').replaceChildren(box); box.scrollIntoView({behavior: 'smooth'});
+  if (t.interviews.length) { box.append(el('div', 'Interviews', 'section-title')); const tb = el('table');
+    t.interviews.forEach(i => { const tr = el('tr'); [i.round, (i.scheduled_at || '').replace('T', ' '), i.interviewer || '', i.result || i.status, i.rating ? i.rating + '/5' : '', i.feedback || ''].forEach(v => tr.append(el('td', v))); tb.append(tr); });
+    const w = el('div', undefined, 'table-wrap'); w.append(tb); box.append(w); }
+  if (t.offers.length) { box.append(el('div', 'Offers', 'section-title')); t.offers.forEach(o => box.append(el('div', `${o.ctc_lpa} LPA · joining ${o.joining_date} · ${o.status}`))); }
+  box.append(el('div', 'Timeline', 'section-title')); const ul = el('ul', undefined, 'timeline');
+  t.events.slice().reverse().forEach(e => { const li = el('li'); li.append(el('div', `${e.event.replace(/_/g, ' ')}${e.detail ? ': ' + e.detail : ''}`), el('div', `${e.ts.replace('T', ' ')} · ${e.actor}`, 'muted')); ul.append(li); });
+  box.append(ul);
+  $('hDetail').replaceChildren(box); box.scrollIntoView({behavior: 'smooth', block: 'nearest'});
 }
 api('/api/me').then(start).catch(() => {});
 </script>

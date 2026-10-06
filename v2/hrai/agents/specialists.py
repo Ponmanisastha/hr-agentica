@@ -133,7 +133,17 @@ RECRUITMENT = Spec(
     examples=["Read the new resumes in the inbox", "Anita cleared L1 with rating 4, schedule L2 on 2026-10-12 at 11:00",
               "What follow-ups are due this week?"])
 
-SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT)}
+INSIGHTS = Spec(
+    "insights", "HR insights agent",
+    "Answers questions about HR numbers and trends (hiring funnel, round pass rates, time to hire, headcount, leave, "
+    "onboarding, AI spend) and says what needs attention today.", "fast",
+    ["hr_insights", "needs_attention", "pipeline_summary", "load_skill"],
+    "You are the HR insights agent. Answer with numbers from the tools only; never estimate or invent a figure. Lead "
+    "with the answer in one or two sentences, then at most five bullet points. When something needs action, say what "
+    "and where (Hiring board, Approvals, Tickets, Budget). If the data is too thin to show a trend, say so.",
+    examples=["How is hiring going?", "What is our offer acceptance rate?", "What needs my attention today?"])
+
+SPECS = {s.key: s for s in (POLICY, LEAVE, ONBOARDING, SCREENING, RECRUITMENT, INSIGHTS)}
 
 
 # ---------------------------------------------------------------- rules-only plans (no model)
@@ -277,5 +287,19 @@ def plan_recruitment(run, request):
     return run.call("pipeline_summary")["summary"]
 
 
+def plan_insights(run, request):
+    t = request.lower()
+    if re.search(r"attention|to ?do|today|pending|overdue|what should|next action", t):
+        items = run.call("needs_attention")["items"]
+        return ("Needs attention:\n" + "\n".join(f"{i + 1}. {a['text']}" for i, a in enumerate(items))) if items \
+            else "Nothing needs attention right now."
+    for section, pattern in (("ai", r"\bai\b|budget|spend|cost|token"), ("leave", r"leave"),
+                             ("onboarding", r"onboarding"), ("workforce", r"headcount|department|workforce|joiners")):
+        if re.search(pattern, t):
+            data = run.call("hr_insights", section=section)
+            return f"{section.title()} insights:\n" + json.dumps(data.get(section, data), indent=1, default=str)[:3000]
+    return run.call("hr_insights")["summary"]
+
+
 PLANS = {"policy": plan_policy, "leave": plan_leave, "onboarding": plan_onboarding, "screening": plan_screening,
-         "recruitment": plan_recruitment}
+         "recruitment": plan_recruitment, "insights": plan_insights}

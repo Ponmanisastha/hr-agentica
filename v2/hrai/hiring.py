@@ -248,6 +248,8 @@ def move(candidate_ref, stage, note=""):
     c = get(candidate_ref)
     db.x("UPDATE candidates SET stage=?, status_note=?, updated_at=? WHERE id=?", (stage, note or c["status_note"], db.now(), c["id"]))
     log(c["id"], f"moved_{stage}", note)
+    if stage in ("rejected", "withdrawn", "offer_declined"):
+        db.x("UPDATE followups SET status='done', done_at=? WHERE candidate_id=? AND status='open'", (db.now(), c["id"]))
     _file_copy(c["id"], stage)
     return {"candidate_id": c["id"], "stage": stage}
 
@@ -272,6 +274,7 @@ def schedule(candidate_ref, round_name=None, when=None, interviewer="", mode="Vi
     _draft(c["email"], f"{round_name} interview: {job['title']}",
            f"Dear {c['name']},\n\nYour {round_name} interview for {job['title']} is scheduled on {when.replace('T', ' at ')} "
            f"({mode}){' with ' + interviewer if interviewer else ''}. Please confirm by replying to this email.\n\nRegards,\nTalent Acquisition")
+    _settle(c["id"], "schedule_next_round")
     add_followup(c["id"], when[:10], "interview_reminder", f"Remind {c['name']} and {interviewer or 'the panel'} about {round_name}",
                  offset_days=-1)
     return {"interview_id": iid, "candidate_id": c["id"], "round": round_name, "scheduled_at": when}
@@ -293,6 +296,7 @@ def record_result(candidate_ref, round_name, result, rating=None, feedback=""):
     db.x("UPDATE interviews SET status='completed', result=?, rating=?, feedback=?, updated_at=? WHERE id=?",
          (result, rating, feedback, db.now(), iv_id))
     log(c["id"], f"{round_name}_{result}", f"rating {rating or '-'}: {feedback}")
+    _settle(c["id"], "interview_reminder", f"about {round_name}")
     if result == "fail":
         move(c["id"], "rejected", f"Did not clear {round_name}")
         job = db.q1("SELECT title FROM jobs WHERE id=?", (c["job_id"],))
@@ -326,6 +330,7 @@ def make_offer(candidate_ref, ctc_lpa, joining_date):
                ("offer", str(oid), f"Offer for {c['name']} ({c['job_id']}): {ctc_lpa} LPA, joining {joining_date}",
                 json.dumps({"offer_id": oid}), _actor(), db.now()))
     db.x("UPDATE offers SET approval_id=? WHERE id=?", (aid, oid))
+    _settle(c["id"], "make_offer")
     log(c["id"], "offer_requested", f"{ctc_lpa} LPA, joining {joining_date}; approval #{aid}")
     return {"offer_id": oid, "approval_id": aid, "status": "pending_approval"}
 
@@ -353,6 +358,7 @@ def offer_response(candidate_ref, accepted, joining_date=None):
     o = db.q1("SELECT * FROM offers WHERE candidate_id=? AND status='sent' ORDER BY id DESC LIMIT 1", (c["id"],))
     if not o:
         raise HiringError(f"No sent offer for {c['name']}")
+    _settle(c["id"], "offer_response")
     if not accepted:
         db.x("UPDATE offers SET status='declined', updated_at=? WHERE id=?", (db.now(), o["id"]))
         return move(c["id"], "offer_declined", "Declined the offer")
@@ -383,6 +389,16 @@ def mark_joined(candidate_ref):
 
 
 # ---------------------------------------------------------------- follow-ups
+
+def _settle(candidate_id, kind, note_suffix=None):
+    """Close open follow-ups that an action just made moot (a reminder for an interview that happened, and so on)."""
+    sql, args = "UPDATE followups SET status='done', done_at=? WHERE candidate_id=? AND kind=? AND status='open'", \
+        [db.now(), candidate_id, kind]
+    if note_suffix:
+        sql += " AND note LIKE ?"
+        args.append(f"%{note_suffix}")
+    db.x(sql, args)
+
 
 def add_followup(candidate_id, base_date, kind, note, offset_days=0):
     due = (date.fromisoformat(base_date[:10]) + timedelta(days=offset_days)).isoformat()

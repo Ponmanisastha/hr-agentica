@@ -43,6 +43,9 @@ def recall_node(state: State):
 
 def keyword_route(text):
     t = text.lower()
+    if re.search(r"insight|analytic|dashboard|metric|kpi|trend|funnel|time to (hire|offer|join)|acceptance rate|"
+                 r"pass rate|headcount|needs? (my )?attention|how is hiring|statistics|\bstats\b", t):
+        return "insights"
     if re.search(r"inbox|folder|pipeline|interview|\bround\b|\bl\d+\b|\bhr round|final round|offer|joining date|joined|"
                  r"follow[- ]?ups?|hiring status|candidate status|cleared|ingest", t):
         return "recruitment"

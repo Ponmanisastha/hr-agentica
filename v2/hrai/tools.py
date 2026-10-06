@@ -490,3 +490,28 @@ def complete_followup(followup_id: int, note: str = "") -> dict:
 def set_interview_rounds(job_id: str, rounds: list[str]) -> dict:
     """Set a job's interview rounds in order, e.g. ["L1", "L2", "L3", "HR", "Final"]."""
     return {"job_id": job_id, "rounds": _hiring(lambda h: h.set_rounds, job_id, rounds)}
+
+
+# ---------------------------------------------------------------- insights
+
+@hr_tool(HR_ROLES)
+def hr_insights(section: str = "", job_id: str = "") -> dict:
+    """HR analytics. section: '' for a plain-language snapshot plus key numbers, or one of hiring, workforce, leave,
+    onboarding, ai, operations for that section's detail. job_id narrows hiring numbers to one job."""
+    from . import insights
+    fns = {"hiring": lambda: insights.hiring(job_id or None), "workforce": insights.workforce, "leave": insights.leave,
+           "onboarding": insights.onboarding, "ai": insights.ai_usage, "operations": insights.operations}
+    if section:
+        if section not in fns:
+            return {"error": f"Unknown section {section!r}; use one of {', '.join(fns)}"}
+        return {section: fns[section]()}
+    data = insights.overview(job_id or None)
+    return {"summary": insights.narrate(data), "kpis": data["kpis"]}
+
+
+@hr_tool(HR_ROLES)
+def needs_attention(limit: int = 10) -> dict:
+    """What needs HR today, most urgent first: overdue follow-ups, approvals, unscheduled interviews, missing results,
+    joiners with missing documents, budgets running out, fixes awaiting review."""
+    from . import insights
+    return {"items": insights.attention(limit)}

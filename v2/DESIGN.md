@@ -154,7 +154,28 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 - **Triggers.** `inbox_watch` (every 2 minutes), `hiring_followups` (08:30: HR digest and next-day interview
   reminders), `stale_candidates` (10:00: anyone stuck 5+ days gets a follow-up).
 
-## 10. Phases
+## 10. Insights and the console redesign (HR suite, phase 2)
+
+`hrai/insights.py` computes every number from SQLite on request (no stale cache): the hiring funnel (candidates who
+*reached* each step), per-round pass rate (passed / decided) and average rating, average days from application to
+offer, acceptance and joining, offer acceptance (accepted / answered), missing must-have skills among rejected
+resumes, headcount, joiners by month, leave by type, onboarding progress, AI spend per day, per agent and per tier,
+and tickets and feedback.
+
+- **Insights agent** (fast tier, `hr_insights` and `needs_attention` tools, `hr-insights` skill). It answers with tool
+  numbers only. The router sends analytics questions to it; leave-policy questions still go to the policy agent.
+- **Needs attention** is the UX agent behind the dashboard: concrete next steps, most urgent first, each naming the
+  page (and candidate or ticket) to act on. Actions also close follow-ups they make moot: recording a round closes its
+  reminder, scheduling a round closes "schedule next round", requesting an offer closes "prepare the offer", and
+  rejection or withdrawal closes the rest.
+- **Console.** Sidebar navigation, a Ctrl K ask bar on every page, a light and a dark theme (system by default), a
+  phone layout, and charts drawn in plain HTML/SVG with no chart library or CDN, so it works offline. Charts follow
+  one validated palette (colour-blind checked in both themes), keep values readable without hover, and each has a
+  table view. Status colours always come with an icon and a word.
+- **Export.** `/api/insights/candidates.csv` (HR and admin only); cells that start with `=`, `+`, `-` or `@` are
+  prefixed so resume text cannot run as a spreadsheet formula.
+
+## 11. Phases
 
 | Phase | Content | Status |
 | --- | --- | --- |
@@ -164,14 +185,14 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 | 4 | MCP server, A2A, triggers, web console | Done |
 | 5 | Ticket tracker and auto-fix agent with PRs and human approval | Done |
 | 6 | Hiring pipeline: resume inbox, screening, L1..Ln/HR/Final rounds, offers, joining, follow-ups | Done (HR suite phase 1) |
-| 7 | Insights and analytics dashboard; UI redesign | Next |
-| 8 | Salary management (Indian payroll), project management, events and HR activities | Planned |
+| 7 | Insights and analytics dashboard; UI redesign | Done (HR suite phase 2) |
+| 8 | Salary management (Indian payroll), project management, events and HR activities | Next |
 | 9 | Port the v1 voice-call agent; real HRMS/ATS connectors; email sending behind approval | Later |
 | 10 | Multimodal document checks (ID proofs, offer letters); evaluation suite for answer quality | Later |
 
-## 11. What was tested, and what was not
+## 12. What was tested, and what was not
 
-**Tested (36 automated tests on Python 3.14.6, offline):**
+**Tested (43 automated tests on Python 3.14.6, offline):**
 - Login, hashing, lockout and roles
 - All four agents in rules-only mode
 - The LLM tool loop with a scripted model response
@@ -185,6 +206,8 @@ MAG is read here as memory-augmented generation. If you meant multimodal generat
 - Triggers
 - The hiring pipeline: .pdf, .docx and .txt resumes, sorting, duplicates, a five-round journey to offer approval,
   joining and follow-ups, fail and hold, the web upload, and the triggers
+- Insights: funnel, rounds, missing skills, the attention list and its ordering, moot follow-ups closing, the
+  insights agent and routing, the daily report, the dashboard API and CSV (including role checks and formula escaping)
 - The full ticket workflow (gap → patch → worktree tests → review → approve → merge → closed, plus the reject and needs-human paths) in a repo where the app sits in a subfolder
 
 **Also checked by hand:** the MCP server over stdio with a real MCP client, the CrewAI wiring on Python 3.13 (crew assembly and tools, with the model call mocked), and MiniLM semantic search.

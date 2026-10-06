@@ -30,11 +30,13 @@ PERMISSIONS = {
     "agent:onboarding": {"admin", "hr", "service"},
     "agent:screening": {"admin", "hr", "service"},
     "agent:recruitment": {"admin", "hr", "service"},
+    "agent:insights": {"admin", "hr", "service"},
     "leave:any_employee": {"admin", "hr", "manager", "service"},
     "approvals:decide": {"admin", "hr", "manager"},
     "tickets:view": {"admin", "hr"},
     "tickets:approve": {"admin"},
     "budget:view": {"admin", "hr"},
+    "insights:view": {"admin", "hr"},
     "budget:set": {"admin"},
     "users:manage": {"admin"},
 }
